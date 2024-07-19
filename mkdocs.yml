@@ -30,14 +30,15 @@ theme:
              icon: material/weather-night
              name: Switch to dark mode
     icon:
-        repo: fontawesome/brands/github  # GitHub logo in top right
-        logo: "material/arch"  # Equinox logo in top left
+        repo: fontawesome/brands/git-alt  # GitHub logo in top right
+        # logo: "material/arch" blur-radial, terraform
+        logo: "material/death-star-variant"
     favicon: "_static/favicon-32x32.png"
     # custom_dir: "docs/_overrides"  # Overriding part of the HTML
 
 
-site_name: cycmc
-site_description: Documentation for the cycmc software library.
+site_name: cymyc
+site_description: Documentation for the cymyc software library.
 site_author: Justin Tan
 site_url: https://justin-tan.github.io/cycmc/
 
