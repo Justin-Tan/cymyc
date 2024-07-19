@@ -39,7 +39,7 @@ theme:
 site_name: cycmc
 site_description: Documentation for the cycmc software library.
 site_author: Justin Tan
-site_url: https://docs.kidger.site/equinox
+site_url: https://justin-tan.github.io/cycmc/
 
 repo_url: https://github.com/Justin-Tan/cycmc
 repo_name: justin-tan/cycmc
