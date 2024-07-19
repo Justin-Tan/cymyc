@@ -37,12 +37,12 @@ theme:
 
 
 site_name: cycmc
-site_description: Documentation for the Equinox software library.
-site_author: Patrick Kidger
+site_description: Documentation for the cycmc software library.
+site_author: Justin Tan
 site_url: https://docs.kidger.site/equinox
 
-repo_url: https://github.com/patrick-kidger/equinox
-repo_name: patrick-kidger/equinox
+repo_url: https://github.com/Justin-Tan/cycmc
+repo_name: justin-tan/cycmc
 edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
 
 strict: true  # Don't allow warnings during the build process
@@ -56,7 +56,7 @@ extra_javascript:
 extra_css:
     - https://unpkg.com/katex@0/dist/katex.min.css
     - _static/custom_css.css
-    
+
 markdown_extensions:
     - pymdownx.arithmatex:  # Render LaTeX via MathJax
         generic: true
@@ -73,9 +73,6 @@ markdown_extensions:
     - footnotes
     - pymdownx.mark
     - attr_list
-    - pymdownx.emoji:
-        emoji_index: !!python/name:materialx.emoji.twemoji
-        emoji_generator: !!python/name:materialx.emoji.to_svg
     - pymdownx.betterem
 
 

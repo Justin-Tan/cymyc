@@ -22,5 +22,3 @@ def metric_fn(p):
 def christoffel_symbols(p):
     return del_z(p, metric_fn)
 ```
-
-:smile: 
