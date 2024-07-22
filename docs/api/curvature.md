@@ -1,0 +1,2 @@
+::: src.curvature
+    handler: python

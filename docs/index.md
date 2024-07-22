@@ -1,3 +1,7 @@
+---
+icon: material/blur-radial
+---
+
 # Getting started
 
 `cymyc` is a library for numerical differential geometry on Calabi-Yau manifolds written in JAX, enabling performant:
@@ -10,6 +14,21 @@ in addition to many other features.
 
 If you're completely new to JAX or Python, then start with this [EXAMPLE.](basics.md)
 
+## Installation
+
+Pip package here.
+```
+pip install cymyc
+```
+Requires Python 3.10+ and Jax 0.4.20+.
+
+## Documentation / examples
+
+Check out https://justin-tan.github.io/cymyc/. 
+
+### Contributing
+Please open an issue / pull request if you encounter unexpected behaviour. Feel free to get in touch anytime to discuss the project.
+
 ## Citation
 --8<-- ".citation.md"
 
@@ -17,8 +36,9 @@ If you're completely new to JAX or Python, then start with this [EXAMPLE.](basic
 
 **Numerical metrics on Calabi-Yaus**
 
-* [cymetric]() - Python library for studying Calabi-Yau metrics.
-* [MLGeometry](https://github.com/yidiq7/MLGeometry) - Machine learning Calabi-Yau metrics.
+* [cyjax](https://github.com/ml4physics/cyjax) - Machine learning Calabi-Yau metrics with Jax.
+* [cymetric](https://github.com/pythoncymetric/cymetric) - Python library for studying Calabi-Yau metrics.
+* [MLGeometry](https://github.com/yidiq7/MLGeometry) - Machine learning Calabi-Yau metrics
 
 **JAX ecosystem**
 
@@ -26,16 +46,3 @@ If you're completely new to JAX or Python, then start with this [EXAMPLE.](basic
 * [flax](https://github.com/google/flax) - Neural network library.
 
 
-## Commands
-
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
