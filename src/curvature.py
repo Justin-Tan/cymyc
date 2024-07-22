@@ -1,4 +1,5 @@
 """Calculation of various curvature-related quantities for a general Kahler manifold.
+Note some functions may specialise to the case of a projective variety.
 In general these functions expect local `c_dim` complex coordinates `z` as with the 
 real and imaginary parts concatenated to form a real-valued `2*c_dim` vector,
 `x = [Re(z); Im(z)]`
@@ -30,7 +31,7 @@ from .utils import math_utils
 #     """
 #     return f"Hello {name}!"
 
-def del_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args) -> Array:
+def del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Array:
     r"""Holomorphic derivative of a function.
 
     Parameters
@@ -71,7 +72,7 @@ def del_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args) -> Array
     
     return jnp.squeeze(dfun_dz)
 
-def del_bar_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args) -> Array:
+def del_bar_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Array:
     r"""Anti-holomorphic derivative of a function.
 
     Parameters
@@ -98,7 +99,7 @@ def del_bar_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args) -> A
 
 
 @partial(jit, static_argnums=(1,))
-def del_z_bar_del_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args, 
+def del_z_bar_del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args, 
                     wide: bool = False) -> Array:
     r"""Computes ddbar of a given function.
     
@@ -138,40 +139,49 @@ def del_z_bar_del_z(p: Float[Array, "dim"], fun: Callable[[Array], Array], *args
 
     return 0.25 * jnp.squeeze(jax.lax.complex(d2f_dx2 + d2f_dy2, d2f_dydx - d2f_dxdy))
 
-# @partial(jit, static_argnums=(1,))
-# def christoffel_symbols_kahler(p, metric_fn, pullbacks=None):
-#     """
+@partial(jit, static_argnums=(1,))
+def christoffel_symbols_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
+                               pullbacks: Complex[Array, "i proj_dim"] =None):
+    r"""Returns Levi-Civita pullback holomorphic connection on variety $\iota: X \hookrightarrow P^n$.
 
-#     Returns Levi-Civita pullback connection on variety \iota: X \hookrightarrow P^n.
+    Parameters
+    ----------
+    p : array_like  
+        2*complex_dim real inhomogeneous coords at which `fun` is evaluated. Shape [i].
+    metric_fn : callable
+        Function representing metric tensor in local coordinates $g : \mathbb{R}^m -> \mathbb{C}^{a,b...}$.
 
-#     Parameters
-#     ----------
-#             `p`     : 2*complex_dim real inhomogeneous coords at 
-#                       which metric matrix is evaluated. Shape [i].
-#     Returns
-#     -------
-#             `cs`:   Christoffel symbols of the Kahler metric.
-#                     $\Gamma^k_{ij}$. Shape [...,k,i,j],
-#                     symmetric in (i,j). For a Kahler metric 
-#                     symmetries are inherited from the Levi-
-#                     Civita connection. The Kahler conditions 
-#                     imply $\Gamma^{\lambda}_{\mu \nu}$ and the
-#                     conjugate are the only nonzero connection coeffs.
-#     """
+    Returns
+    -------
+    gamma_holo: array_like
+        Holomorphic Christoffel symbols of the Kahler metric.
+        $\Gamma^{\lambda}_{\mu \nu}$. Shape [...,k,i,j],
+        symmetric in (i,j). The Kahler conditions 
+        imply $\Gamma^{\lambda}_{\mu \nu}$ and its
+        conjugate are the only nonzero connection coeffs.
+    Other Parameters
+    ----------------
+    pullbacks : array_like, optional
+        Pullback tensor from ambient to projective variety. If supplied, computes Christoffels
+        on the variety.
+    """
     
-#     # metric_fn(p) gives g_{\mu \bar{\nu}}
-#     g_inv = jnp.linalg.inv(metric_fn(p))  # g^{\bar{\nu} \mu}
-#     jac_g_holo = del_z(p, metric_fn)
+    # metric_fn(p) gives g_{\mu \bar{\nu}}
+    g_inv = jnp.linalg.inv(metric_fn(p))  # g^{\bar{\nu} \mu}
+    jac_g_holo = del_z(p, metric_fn)
     
-#     if pullbacks is not None:
-#         jac_g_holo = jnp.einsum('...ab, ...ijb->...ija', pullbacks, jac_g_holo)
+    if pullbacks is not None:
+        jac_g_holo = jnp.einsum('...ab, ...ijb->...ija', pullbacks, jac_g_holo)
     
-#     gamma_holo = jnp.einsum('...kl, ...jki->...lij', g_inv, jac_g_holo)
-#     return gamma_holo 
+    gamma_holo = jnp.einsum('...kl, ...jki->...lij', g_inv, jac_g_holo)
+    return gamma_holo 
 
-# @partial(jit, static_argnums=(1,))
-# def christoffel_symbols_kahler_antiholo(p, metric_fn, pullbacks=None):
-#     return jnp.conjugate(christoffel_symbols_kahler(p, metric_fn, pullbacks))
+@partial(jit, static_argnums=(1,))
+def christoffel_symbols_kahler_antiholo(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
+                               pullbacks: Complex[Array, "i proj_dim"] =None):
+    r"""Returns Levi-Civita pullback antiholomorphic connection on variety $\iota: X \hookrightarrow P^n$.
+    """
+    return jnp.conjugate(christoffel_symbols_kahler(p, metric_fn, pullbacks))
 
 # @partial(jit, static_argnums=(1,3))
 # def riemann_tensor_kahler(p, metric_fn, pullbacks=None, return_aux=False):
