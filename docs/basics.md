@@ -1,5 +1,5 @@
 ---
-icon: material/blur-radial
+icon: material/death-star-variant
 ---
 
 # The Basics

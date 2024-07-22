@@ -103,7 +103,7 @@ plugins:
                     show_signature_annotations: true
                     show_source: false  # don't include source code
                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
-                    heading_level: 3
+                    heading_level: 2
                 # selection:
                 #     inherited_members: true  # Allow looking up inherited methods
                 rendering:
@@ -113,7 +113,7 @@ plugins:
                     show_signature_annotations: true
                     show_source: false  # don't include source code
                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
-                    heading_level: 4
+                    heading_level: 3
                 setup_commands:
                     - import pytkdocs_tweaks
                     - pytkdocs_tweaks.main()
