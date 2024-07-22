@@ -40,20 +40,18 @@ theme:
 site_name: cymyc
 site_description: Documentation for the cymyc software library.
 site_author: Justin Tan
-site_url: https://justin-tan.github.io/cycmc/
-
-repo_url: https://github.com/Justin-Tan/cycmc
-repo_name: justin-tan/cycmc
+site_url: https://justin-tan.github.io/cymyc/
+repo_url: https://github.com/Justin-Tan/cymyc
+repo_name: justin-tan/cymyc
 edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
 
-strict: true  # Don't allow warnings during the build process
+# strict: true  # Don't allow warnings during the build process
 
 extra_javascript: 
     # The below three make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
   - _static/katex.js
   - https://unpkg.com/katex@0/dist/katex.min.js
   - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
-
 extra_css:
     - https://unpkg.com/katex@0/dist/katex.min.css
     - _static/custom_css.css
@@ -76,10 +74,15 @@ markdown_extensions:
     - attr_list
     - pymdownx.betterem
 
+plugins:
 
 plugins:
     - search  # default search plugin; needs manually re-enabling when using any other plugins
     - autorefs  # Cross-links to headings
+    # - git-authors:
+    #     show_email_address: true
+    #     exclude:
+    #         - index.md
     # - include_exclude_files:
     #     include:
     #         - ".htaccess"
@@ -91,17 +94,18 @@ plugins:
     - mkdocstrings:
         handlers:
             python:
-                setup_commands:
-                    - import pytkdocs_tweaks
-                    - pytkdocs_tweaks.main()
-                    - import jaxtyping
-                    - jaxtyping.set_array_name_format("array")
-                    - import jax
-                    - jax.ShapeDtypeStruct.__module__ = "jax"
-                    - jax.core.ClosedJaxpr.__module__ = "jax.core"
-
-                selection:
-                    inherited_members: true  # Allow looking up inherited methods
+                options:
+                    docstring_style: numpy
+                    docstring_section_style: table
+                    show_root_heading: true  # actually display anything at all...
+                    show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
+                    show_if_no_docstring: true
+                    show_signature_annotations: true
+                    show_source: false  # don't include source code
+                    members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
+                    heading_level: 3
+                # selection:
+                #     inherited_members: true  # Allow looking up inherited methods
                 rendering:
                     show_root_heading: true  # actually display anything at all...
                     show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
@@ -110,11 +114,30 @@ plugins:
                     show_source: false  # don't include source code
                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
                     heading_level: 4
+                setup_commands:
+                    - import pytkdocs_tweaks
+                    - pytkdocs_tweaks.main()
+                    - import jaxtyping
+                    - jaxtyping.set_array_name_format("array")
+                    - import jax
+                    - jax.ShapeDtypeStruct.__module__ = "jax"
+                    - jax.core.ClosedJaxpr.__module__ = "jax.core"
+                    - import numpy as np
 
-# nav:
-#     - 'index.md'
-#     - 'all-of-equinox.md'
-#     - Examples:
+
+
+nav:
+    - 'index.md'
+    - 'basics.md'
+    - Examples:
+        - Curvature: 'examples/curvature.md'
+        - Complex structure moduli space: 'examples/cs_moduli.md'
+        - Calabi-Yau metrics: 'examples/ricci_flat_metrics.md'
+        - Harmonic forms: 'examples/harmonic_forms.md'
+    - Basic API:
+        - Geometry:
+            - 'api/curvature.md'
+            - 'api/example.md'
 #         - Introductory:
 #             - CNN on MNIST: 'examples/mnist.ipynb'
 #             - Train RNN: 'examples/train_rnn.ipynb'

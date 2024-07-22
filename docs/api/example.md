@@ -1,0 +1,2 @@
+::: src.example
+    handler: python

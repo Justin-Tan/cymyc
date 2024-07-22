@@ -1,3 +1,7 @@
+---
+icon: material/blur-radial
+---
+
 # The Basics
 
 ## Philosophy
