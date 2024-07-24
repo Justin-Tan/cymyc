@@ -1,8 +1,4 @@
----
-icon: material/blur-radial
----
-
-# Getting started
+# CYMYC 
 
 `cymyc` is a library for numerical differential geometry on Calabi-Yau manifolds written in JAX, enabling performant:
 
@@ -27,10 +23,10 @@ Requires Python 3.10+ and Jax 0.4.20+.
 Check out https://justin-tan.github.io/cymyc/. 
 
 ### Contributing
-Please open an issue / pull request if you encounter unexpected behaviour. We're always happy to discuss the project - just get in touch!
+Please open an issue / pull request if you encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project.
 
 ## Citation
---8<-- ".citation.md"
+--8<-- "docs/citation.md"
 
 ## Related libraries
 
