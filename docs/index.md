@@ -12,7 +12,7 @@ icon: material/blur-radial
 
 in addition to many other features. 
 
-If you're completely new to JAX or Python, then start with this [EXAMPLE.](basics.md)
+If you're completely new to JAX or Python, then start with this [example.](basics.md)
 
 ## Installation
 
@@ -27,7 +27,7 @@ Requires Python 3.10+ and Jax 0.4.20+.
 Check out https://justin-tan.github.io/cymyc/. 
 
 ### Contributing
-Please open an issue / pull request if you encounter unexpected behaviour. Feel free to get in touch anytime to discuss the project.
+Please open an issue / pull request if you have suggestions or encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project.
 
 ## Citation
 --8<-- ".citation.md"

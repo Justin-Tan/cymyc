@@ -26,3 +26,12 @@ def metric_fn(p):
 def christoffel_symbols(p):
     return del_z(p, metric_fn)
 ```
+
+!!! note
+    This is a note.
+
+!!! tip
+    This is a tip.
+
+!!! info
+    and this is an info block.
