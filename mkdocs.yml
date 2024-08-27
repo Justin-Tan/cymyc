@@ -15,8 +15,6 @@ theme:
     language: en
     palette:
         # Light mode / dark mode
-        # We deliberately don't automatically use `media` to check a user's preferences. We default to light mode as
-        # (a) it looks more professional, and (b) is more obvious about the fact that it offers a (dark mode) toggle.
         - scheme: slate
           primary: black
           accent: amber
@@ -45,7 +43,7 @@ repo_url: https://github.com/Justin-Tan/cymyc
 repo_name: justin-tan/cymyc
 edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
 
-# strict: true  # Don't allow warnings during the build process
+strict: true  # Don't allow warnings during the build process
 
 extra_javascript: 
     # The below three make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
@@ -99,13 +97,13 @@ plugins:
                     docstring_section_style: table
                     show_root_heading: true  # actually display anything at all...
                     show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
-                    show_if_no_docstring: true
+                    show_if_no_docstring: false
                     show_signature_annotations: true
                     show_source: false  # don't include source code
                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
-                    heading_level: 2
-                # selection:
-                #     inherited_members: true  # Allow looking up inherited methods
+                    heading_level: 3
+                selection:
+                    inherited_members: true  # Allow looking up inherited methods
                 rendering:
                     show_root_heading: true  # actually display anything at all...
                     show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
@@ -123,21 +121,30 @@ plugins:
                     - jax.ShapeDtypeStruct.__module__ = "jax"
                     - jax.core.ClosedJaxpr.__module__ = "jax.core"
                     - import numpy as np
-
-
+    # - gen-files:
+    #     scripts:
+    #     - docs/_static/gen_ref_pages.py
 
 nav:
     - 'index.md'
-    - 'basics.md'
+    # - 'overview.md'
+    - 'faq.md'
     - Examples:
-        - Curvature: 'examples/curvature.md'
-        - Complex structure moduli space: 'examples/cs_moduli.md'
-        - Calabi-Yau metrics: 'examples/ricci_flat_metrics.md'
-        - Harmonic forms: 'examples/harmonic_forms.md'
+        - Curvature: 'examples/curvature.ipynb'
+        # - Complex structure moduli space: 'examples/cs_moduli.md'
+        - Calabi-Yau metrics: 'examples/metric_approx.ipynb'
+        - Harmonic forms: 'examples/harmonic.ipynb'
+        - Example workflow: 'examples/workflow.md'
     - Basic API:
         - Geometry:
             - 'api/curvature.md'
-            - 'api/example.md'
+            - 'api/chern_gauss_bonnet.md'
+            - 'api/fubini_study.md'
+            - 'api/moduli_space.md'
+        - Approximations:
+            - 'api/losses.md'
+            - 'api/models.md'
+            - 'api/harmonic.md'
 #         - Introductory:
 #             - CNN on MNIST: 'examples/mnist.ipynb'
 #             - Train RNN: 'examples/train_rnn.ipynb'

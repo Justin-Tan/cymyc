@@ -204,8 +204,8 @@ def load_params(init_params, params_path):
 
 
 def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz', metadata_out='metadata.pkl'):
-    from src.utils import math_utils
-    from src import alg_geo
+    from . import math_utils
+    from .. import alg_geo
 
     _d = dict(zip(('monomials', 'cy_dim', 'kmoduli', 'ambient'), poly_data))
     config = Struct(**_d)

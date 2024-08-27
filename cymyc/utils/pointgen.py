@@ -1,25 +1,24 @@
-import jax
+"""Fast point sampling from hypersurfaces in projective space.
+"""
 
-from jax import config
-config.update("jax_enable_x64", True)
+import jax
+jax.config.update("jax_enable_x64", True)
 
 import numpy as np  # original CPU-backed NumPy
 import jax.numpy as jnp
 
-from jax import grad, jit, jacfwd, vmap, random
+from jax import jit, vmap, random
 
-import math
-import pickle, time, os
+import time, os
 from functools import partial
 from collections import defaultdict
 
 import sympy as sp
 
 # custom
-from src import alg_geo, fubini_study
-from src.utils import math_utils
-from src.utils import gen_utils as utils
-from examples import poly_spec
+from . import math_utils
+from . import gen_utils as utils
+from .. import alg_geo, fubini_study
 
 cpu_device = jax.devices('cpu')[0]
 
@@ -76,9 +75,6 @@ def root_solver(p, q, t_coeffs_data, t_generators):
     t_coeffs = jnp.array(t_coeffs)
 
     # Bezout's theorem says this returns `c_dim` intersection points
-    roots_cpu_fn = jit(partial(jnp.roots, strip_zeros=False), 
-                       device=cpu_device)
-    # t_roots = roots_cpu_fn(t_coeffs)
     with jax.default_device(cpu_device):
         t_roots = jnp.roots(t_coeffs, strip_zeros=False)
     pts = p + jnp.expand_dims(t_roots, 1) * q
@@ -88,8 +84,7 @@ def sample_intersect_hypersurface(key: random.PRNGKey, n_p: int,
                                   cy_dim: int, monomials: np.array, 
                                   coefficients: np.array, LOCUS_TOL: float = 1e-10):
 
-    """
-    Samples from manifold defined as a hypersurface in projective space
+    """Samples from manifold defined as a hypersurface in projective space
     by solving for the intersection 'Q(p + t * q)'.
     """
 
@@ -126,6 +121,7 @@ def sample_intersect_hypersurface(key: random.PRNGKey, n_p: int,
 if __name__ == "__main__":
 
     import argparse
+    from examples import poly_spec
 
     parser = argparse.ArgumentParser(
         description='Hypersurface point generation.',
@@ -133,7 +129,7 @@ if __name__ == "__main__":
 
     parser.add_argument('-o', '--output_path', type=str, help="Path to the output directory for points.", required=True)
     parser.add_argument('-n_p', '--num_pts', type=int, help="Number of points to generate.", default=100000)
-    parser.add_argument('-val', '--val_frac', type=float, help="Percentage of points to use for validation.", default=0.1)
+    parser.add_argument('-val', '--val_frac', type=float, help="Percentage of points to use for validation.", default=0.2)
     parser.add_argument('-psi', '--psi', type=float, help="Complex moduli parameter.", default=0.0)
     args = parser.parse_args()
 
@@ -142,11 +138,11 @@ if __name__ == "__main__":
     n_devs, n_p = len(jax.devices('cpu')), args.num_pts
     v_p = int(args.val_frac * n_p)
 
-    # Specify polynomial here
+    # Example polynomial specification
     # ========================
     poly_specification = poly_spec.mirror_quintic_spec
     coeff_fn = poly_spec.mirror_quintic_coefficients
-    psi = args.psi  # SPECIFY COEFFICIENT <<< <<< <<< <<< <<< <<< <<<
+    psi = args.psi
     coefficients = coeff_fn(args.psi)
     # ========================
 

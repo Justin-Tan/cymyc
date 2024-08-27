@@ -1,3 +1,8 @@
+"""Point sampling from complete intersection manifolds in products of projective spaces. 
+The core computation was originally developed in the `cymetric` package, 
+https://github.com/pythoncymetric/cymetric/blob/main/cymetric/pointgen/pointgen_cicy.py.
+"""
+
 import os, multiprocessing
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
     multiprocessing.cpu_count())
@@ -12,20 +17,24 @@ config.update('jax_platform_name', 'cpu')
 import numpy as np  # original CPU-backed NumPy
 import jax.numpy as jnp
 
-from jax import jit, jacfwd, vmap, random, pmap
+from jax import jit, jacfwd, vmap, random
 
 from functools import partial
 
-import math, time, argparse
+import math, time, argparse, os
 import sympy as sp
 
 import scipy.optimize as so
 import joblib
 from joblib import parallel_config, Parallel, delayed
 
+from tqdm import tqdm
+
 # custom
-from src import alg_geo
-from src.utils import math_utils
+from . import math_utils
+from . import gen_utils as utils
+from .. import alg_geo, dataloading, fubini_study
+
 
 class PointGenerator:
      
@@ -35,15 +44,16 @@ class PointGenerator:
         Finds zero locus of a finite number of homogeneous polynomials in
         product of projective spaces. 
         
-        Note: point generation significantly faster as standalone functions 
+        Note: point generation significantly faster as standalone function
         but needs to be wrapped in a class for 'joblib' to execute correctly
         in a script ...
         """
         self.key = key
         self.cy_dim = cy_dim
+        self._kappa = None
+        self.cdtype = np.complex64
         self.monomials, self.coefficients = monomials, coefficients
         self.ambient = ambient
-        self.c_dim = cy_dim + 2  # homo. coords plus hypersurface constraint
         self.degrees = ambient + 1
         self.n_hyper = len(monomials)
         self.n_fold = np.sum(ambient) -self.n_hyper
@@ -52,9 +62,9 @@ class PointGenerator:
         self.conf_mat, p_conf_mat = self._configuration_matrix(monomials, ambient) 
         self.t_degrees = self._find_degrees(ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
+
         self.METHOD = 'lm'
         self.all_monos, self.all_coeffs = jnp.concatenate(monomials), jnp.concatenate(coefficients)
-
         self.dQdz_info = [alg_geo.dQdz_poly(self.n_coords, m, c) for (m,c) in zip(monomials, coefficients)]
         self.dQdz_monomials, self.dQdz_coeffs = list(zip(*self.dQdz_info))
         self.all_dQdz_monos, self.all_dQdz_coeffs = jnp.concatenate(self.dQdz_monomials, axis=1), jnp.concatenate(self.dQdz_coeffs, axis=1)
@@ -353,8 +363,7 @@ class PointGenerator:
         return 1./residues
     
     def _rescale_points(self, p):
-        """
-        Rescales points 'p' s.t. (\max_i \abs{p} == 1.0) in each projective
+        r"""Rescales points 'p' s.t. (\max_i \abs{p} == 1.0) in each projective
         space factor.
         """
         for i in range(len(self.ambient)):
@@ -363,168 +372,108 @@ class PointGenerator:
             p[:, s:e] = math_utils.rescale(p[:, s:e])[0]
         
         return p
-
-def t_poly_optimize(params, p, t_monomials, t_coeffs, root=True):
-    """
-    Numerically optimize for the roots of these polynomial(s) over the parameters
-    of the hyperplane(s) to find the zero locus of the defining polynomial(s).
-    Note this function is holomorphic.
-
-    Args:
-        p (ndarray[(ncoords, t-max-deg), np.complex128]): Values 
-            for points on the spheres p, q, ...
-        params (ndarray[2*n_hyper, np.float64]): t-values
-
-    Returns:
-        ndarray[..., 2*n_hyper, np.float64]: Difference from zero.
-    """
-    params = math_utils.to_complex(params)
-    p_and_params = jnp.concatenate([p.reshape(-1), params], axis=-1)
-    error = jnp.stack([alg_geo.evaluate_poly(p_and_params, t_mono, t_coeff) for (t_mono, t_coeff) in 
-                 zip(t_monomials, t_coeffs)], axis=-1)
     
-    if root is True: return math_utils.to_real(error)
+    def compute_integration_parameters(self, cicy_pts, n_p, v_p):
+        if self.n_hyper == 1:
+            get_metadata = partial(alg_geo.compute_integration_weights, cy_dim=self.cy_dim)
+            det_g_FS_fn = fubini_study.det_fubini_study_pb
+        else:
+            get_metadata = partial(alg_geo._integration_weights_cicy,
+                n_hyper             = self.n_hyper,
+                cy_dim              = self.cy_dim,
+                n_coords            = self.n_coords,
+                ambient             = self.ambient,
+                kmoduli_ambient     = self.kmoduli_ambient)
+
+            det_g_FS_fn = partial(fubini_study.det_fubini_study_pb_cicy,
+                n_coords    = self.n_coords,
+                ambient     = tuple(self.ambient),
+                cdtype      = np.complex128)
+        get_metadata = jit(get_metadata)
+
+        B = (n_p + v_p) // 12
+        data_batched = dataloading._online_batch(cicy_pts, n_p + v_p, B)
+        weights, pullbacks, dVol_Omegas = [], [], []
+        vol_Omega, vol_g = 0., 0.
+        
+        # TODO: Add hypersurface support to 'pointgen'
+        _n = 0
+        for data in tqdm(data_batched):
+            _p = data
+            w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p, self.dQdz_monomials, self.dQdz_coeffs)
+            weights.append(w)
+            pullbacks.append(pb)
+            dVol_Omegas.append(_dVol_Omega)
+        
+            # compute Monge-Ampere proportionality constant
+            _det_g_FS_pb = vmap(det_g_FS_fn)(math_utils.to_real(_p), pb)
+            _vol_g = jnp.mean(w * _det_g_FS_pb / _dVol_Omega).item()
+            vol_g = math_utils.online_update(vol_g, _vol_g, _n, B)
+
+            _vol_Omega = jnp.mean(w).item()
+            vol_Omega = math_utils.online_update(vol_Omega, _vol_Omega, _n, B)
+            _n += B
+
+        weights, pullbacks = np.squeeze(np.concatenate(weights, axis=0)), np.squeeze(np.concatenate(pullbacks, axis=0))
+        dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
+
+        kappa = vol_g / vol_Omega
+        self._kappa = kappa
+        return {
+            'weights':          weights,
+            'pullbacks':        pullbacks,
+            'dVol_Omegas':      dVol_Omegas,
+            'kappa':            kappa,
+            'vol_g':            vol_g,
+            'vol_Omega':        vol_Omega }
     
-    error = jnp.sum(jnp.abs(error))
-    return error
+    def export(self, path, cicy_pts, n_p, v_p, psi, poly_data, coefficients):
+        os.makedirs(path, exist_ok=True)
+        integration_params = self.compute_integration_parameters(cicy_pts, n_p, v_p)
+        # Store points and integration weights
+        p = math_utils.to_real(cicy_pts)
 
-def _t_poly_jacobian(params, p, t_monomials, t_coeffs):
-    """
-    Internal use only. Autodiff Jacobian of `t_poly_optimize`. 
-    Use with `vmap`.
-    Note: inefficient.
-    Returns:
-        ndarray[n_hyper, n_params], np.complex128]: Jacobian of each of the
-        `n_hyper` polynomials w.r.t. parameters governing intersection.
-    """
-    tpo = partial(t_poly_optimize, t_monomials=t_monomials, t_coeffs=t_coeffs)
-    jac = jax.jacrev(tpo, 0)(params, p)  # params should be real
-    param_dim = jac.shape[-1]
-    c_param_dim = param_dim // 2
-    dTdx, dTdy = jac[..., :c_param_dim], jac[..., c_param_dim:]
-    dTdz = 0.5 * (dTdx - 1.j * dTdy)  # del_z w.r.t. params
+        p_train, p_val = np.array_split(p, (n_p,))
+        w_train, w_val = np.array_split(integration_params['weights'], (n_p,))
+        dVol_Omega_train, dVol_Omega_val = np.array_split(integration_params["dVol_Omegas"], (n_p,))
+        pb_train, pb_val = np.array_split(integration_params["pullbacks"], (n_p,))
 
-    # combine Re, Im parts of output of `t_poly_optimize`
-    out_dim = dTdz.shape[0]
-    c_out_dim = out_dim // 2
-    dTdz = dTdz[..., :c_out_dim, :] + 1.j * dTdz[..., c_out_dim:, :]
-    return dTdz
+        y_train = np.stack((w_train, dVol_Omega_train), axis=-1)
+        y_val = np.stack((w_val, dVol_Omega_val), axis=-1)
 
-def t_poly_jacobian(params, p, pd_monomials, pd_coeffs, dim, 
-                    complex_jac=False):
-    """
-    Analytical Jacobian of objective function for root-finding routines. 
-    Only use with 'vmap'
-    
-    Returns:
-        ndarray[n_hyper, n_params], np.complex128]: Jacobian of each of the
-        `n_hyper` polynomials w.r.t. parameters governing intersection.
-    """
-    params = math_utils.to_complex(params)
-    big_p = jnp.concatenate((p.reshape(-1), params))
-    dT = jnp.stack([alg_geo.evaluate_poly(big_p, pdm, pdc) for
-            pdm, pdc in zip(pd_monomials, pd_coeffs)], axis=0)
-    
-    if complex_jac is True: return jnp.squeeze(dT)
+        np.savez_compressed(os.path.join(path, "dataset.npz"),
+            x_train     = p_train,
+            y_train     = y_train,
+            x_val       = p_val,
+            y_val       = y_val,
+            pb_train    = pb_train,
+            pb_val      = pb_val,
+            kappa       = integration_params["kappa"],
+            vol_g       = integration_params["vol_g"],
+            vol_Omega   = integration_params["vol_Omega"],
+            psi         = psi)
+        
+        metadata = utils.save_metadata(poly_data, coefficients, integration_params["kappa"], path)
 
-    # use the fact that polynomials are holomorphic and 
-    # Cauchy-Riemann to calculate (deficient) Jacobian
-    dudx, dudy = jnp.real(dT), -jnp.imag(dT)
-    dT = jnp.zeros((dim,dim))
-    c_dim = dim // 2
-    dT = dT.at[:c_dim, :c_dim].set(dudx)
-    dT = dT.at[:c_dim, c_dim:].set(dudy)
-    dT = dT.at[c_dim:, :c_dim].set(-dudy)
-    dT = dT.at[c_dim:, c_dim:].set(dudx)
-    return dT
-    
-
-def t_poly_jacobian_onp_single(params, p, pd_monomials, pd_coeffs, complex_jac=False):
-    """
-    Numpy version for lower per-dispatch overhead?
-    """
-    dim = params.shape[-1]
-    c_dim = dim // 2
-    params = params[:c_dim] + 1.j * params[c_dim:]
-    big_p = np.concatenate((p.reshape(-1), params), axis=-1)
-    dT = np.stack([alg_geo.evaluate_poly_batch(np.expand_dims(big_p,0),
-                                               pdm, pdc) for
-            pdm, pdc in zip(pd_monomials, pd_coeffs)], axis=0)
-    if complex_jac is True: return np.squeeze(dT)
-
-    # use the fact that polynomials are holomorphic and 
-    # Cauchy-Riemann to calculate (deficient) Jacobian
-    dudx, dudy = np.real(dT), -np.imag(dT)
-    dT = np.zeros((dim,dim))
-    dT[:c_dim, :c_dim] = dudx
-    dT[:c_dim, c_dim:] = dudy
-    dT[c_dim:, :c_dim] = -dudy
-    dT[c_dim:, c_dim:] = dudx
-    return dT
-
-def t_poly_jacobian_onp_batch(params, p, pd_monomials, pd_coeffs, complex_jac=True):
-    """
-    Numpy version for lower per-dispatch overhead.
-    """
-    B, dim = params.shape
-    c_dim = dim // 2
-    params = params[...,:c_dim] + 1.j * params[...,c_dim:]
-    big_p = np.concatenate((p.reshape(B,-1), params), axis=-1)
-    dT = np.stack([alg_geo.evaluate_poly_batch(np.expand_dims(big_p,1),
-                                               pdm, pdc) for
-            pdm, pdc in zip(pd_monomials, pd_coeffs)], axis=1)
-    
-    if complex_jac is True: return np.squeeze(dT)
-    
-    # use the fact that polynomials are holomorphic and 
-    # Cauchy-Riemann to calculate (redundant) Jacobian
-    dudx, dudy = np.real(dT), -np.imag(dT)
-    dT = np.zeros((B,dim,dim))
-    dT[:, :c_dim, :c_dim] = dudx
-    dT[:, :c_dim, c_dim:] = dudy
-    dT[:, c_dim:, :c_dim] = -dudy
-    dT[:, c_dim:, c_dim:] = dudx
-    return dT
-
-def t_poly_optimize_onp(params, p, t_monomials, t_coeffs, root=True):
-    """
-    Numerically optimize for the roots of these polynomial(s) over the parameters
-    of the hyperplane(s) to find the zero locus of the defining polynomial(s).
-    Note this function is holomorphic.
-
-    Args:
-        p (ndarray[(ncoords, t-max-deg), np.complex128]): Values 
-            for points on the spheres p, q, ...
-        params (ndarray[2*n_hyper, np.float64]): t-values
-
-    Returns:
-        ndarray[..., 2*n_hyper, np.float64]: Difference from zero.
-    """
-    params = math_utils.to_complex(params)
-    p_and_params = np.concatenate([p.reshape(-1), params], axis=0)
-    error = np.stack([alg_geo.evaluate_poly(p_and_params, t_mono, t_coeff) for (t_mono, t_coeff) in 
-                 zip(t_monomials, t_coeffs)], axis=-1)
-    
-    if root is True: return math_utils.to_real(error)
-    
-    error = np.sum(np.abs(error))
-    return error
+    @property
+    def kappa(self):
+        if self._kappa is not None:
+            return self._kappa
+        else:
+            raise RuntimeError("kappa not initialized. Run compute_integration_parameters(...) to initialize.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='CICY point generation.',
+        description="CICY point generation.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-o', '--output_path', type=str, help="Path to the output directory for points.", required=True)
     parser.add_argument('-n_p', '--num_pts', type=int, help="Number of points to generate.", default=100000)
     parser.add_argument('-val', '--val_frac', type=float, help="Percentage of points to use for validation.", default=0.2)
+    parser.add_argument('-psi', '--psi', type=float, help="Complex structure parameter where applicable.", default=None)
     args = parser.parse_args()
 
-    from tqdm import tqdm
-
-    from src import fubini_study, dataloading
-    from src.utils import gen_utils as utils
     from examples import poly_spec
 
     start = time.time()
@@ -532,11 +481,12 @@ if __name__ == "__main__":
     n_devs, n_p = len(jax.devices('cpu')), args.num_pts
     v_p = int(args.val_frac * n_p)
 
-    # Specify polynomial here
+    # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.tian_yau_KM_spec
-    coeff_fn = poly_spec.tian_yau_KM_coefficients
-    psi = -0.75
+    poly_specification = poly_spec.X24_spec  # tian_yau_KM_spec
+    coeff_fn = poly_spec.X24_coefficients  # tian_yau_KM_coefficients
+    psi = args.psi
+    if psi is None: psi = 0.5
     coefficients = coeff_fn(psi)
     # ========================
 
@@ -544,68 +494,13 @@ if __name__ == "__main__":
     pg_cicy = PointGenerator(key, cy_dim, monomials, coefficients, ambient)
     dQdz_monomials, dQdz_coeffs = pg_cicy.dQdz_monomials, pg_cicy.dQdz_coeffs
     
-    # generate points
+    # generate points and integration data
     cicy_pts = pg_cicy.sample_intersect_cicy(key, n_p + v_p)
-    
-    if pg_cicy.n_hyper == 1:
-        get_metadata = partial(alg_geo.compute_integration_weights, cy_dim=cy_dim)
-        det_g_FS_fn = fubini_study.det_fubini_study_pb
-    else:
-        get_metadata = partial(alg_geo._integration_weights_cicy, n_hyper=pg_cicy.n_hyper, cy_dim=cy_dim, 
-                               n_coords=pg_cicy.n_coords, ambient=pg_cicy.ambient, kmoduli_ambient=pg_cicy.kmoduli_ambient)
-        det_g_FS_fn = partial(fubini_study.det_fubini_study_pb_cicy, n_coords=pg_cicy.n_coords,
-                ambient=tuple(pg_cicy.ambient), cdtype=np.complex128)
-    get_metadata = jit(get_metadata)
-
-    B = (n_p + v_p) // 12
-    data_batched = dataloading._online_batch(cicy_pts, n_p, B)
-    weights, pullbacks, dVol_Omegas = [], [], []
-    vol_Omega, vol_g = 0., 0.
-    
-    # TODO: Add hypersurface support to 'pointgen'
-    for data in tqdm(data_batched):
-        _p = data
-        w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p, dQdz_monomials, dQdz_coeffs)
-        weights.append(w)
-        pullbacks.append(pb)
-        dVol_Omegas.append(_dVol_Omega)
-    
-        # compute Monge-Ampere proportionality constant
-        _det_g_FS_pb = vmap(det_g_FS_fn)(math_utils.to_real(_p), pb)
-        _vol_g = jnp.mean(w * _det_g_FS_pb / _dVol_Omega).item()
-        vol_g = math_utils.online_update(vol_g, _vol_g, n_p, B)
-
-        _vol_Omega = jnp.mean(w).item()
-        vol_Omega = math_utils.online_update(vol_Omega, _vol_Omega, n_p, B)
-
-    weights, pullbacks = np.squeeze(np.concatenate(weights, axis=0)), np.squeeze(np.concatenate(pullbacks, axis=0))
-    dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
-
-    kappa = vol_g / vol_Omega
-    print(f'kappa: {kappa:.7f}')
+    integration_params = pg_cicy.compute_integration_parameters(cicy_pts, n_p, v_p)
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)
-    f = os.path.join(args.output_path, 'dataset.npz')
+    pg_cicy.export(args.output_path, cicy_pts, n_p, v_p, psi, poly_specification(), coefficients)
 
-    p = math_utils.to_real(cicy_pts)
-
-    if args.val_frac == 0.:
-        np.savez_compressed(f, x=p, w=weights, pb=pullbacks, dVol_Omega=dVol_Omegas, 
-                            kappa=kappa, vol_g=vol_g, vol_Omega=vol_Omega, psi=psi)
-    else:
-        p_train, p_val = np.array_split(p, (n_p,))
-        w_train, w_val = np.array_split(weights, (n_p,))
-        dVol_Omega_train, dVol_Omega_val = np.array_split(dVol_Omegas, (n_p,))
-        pb_train, pb_val = np.array_split(pullbacks, (n_p,))
-
-        y_train = np.stack((w_train, dVol_Omega_train), axis=-1)
-        y_val = np.stack((w_val, dVol_Omega_val), axis=-1)
-
-        np.savez_compressed(f, x_train=p_train, y_train=y_train, x_val=p_val, 
-                            y_val=y_val, pb_train=pb_train, pb_val=pb_val, 
-                            kappa=kappa, vol_g=vol_g, vol_Omega=vol_Omega, psi=psi)
-        
-    metadata = utils.save_metadata(poly_specification(), coefficients, kappa, args.output_path)
     delta_t = time.time() - start
     print(f'Time elapsed: {delta_t:.3f} s')

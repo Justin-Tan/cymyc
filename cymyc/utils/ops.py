@@ -4,12 +4,8 @@ import jax.numpy as jnp
 from flax import linen as nn
 from typing import (
   Any,
-  Iterable,
   List,
   Optional,
-  Sequence,
-  Tuple,
-  Union,
 )
 
 import jax

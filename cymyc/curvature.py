@@ -1,37 +1,47 @@
-"""Calculation of various curvature-related quantities for a general Kahler manifold.
-Note some functions may specialise to the case of a projective variety.
-In general these functions expect local `c_dim` complex coordinates `z` as with the 
-real and imaginary parts concatenated to form a real-valued `2*c_dim` vector,
-`x = [Re(z); Im(z)]`
+r"""Calculation of various curvature-related quantities for a general Kahler manifold $X$. This module may also be used
+to compute curvature information on a real manifold without complex structure, by omitting the imaginary part
+of the local coordinates for $p \in X$.
 
+Note the following:
+
+* Curvature quantities involve $n$-th order derivatives of some generic function `fun`. These are 
+computed with autodiff - a good usage pattern is to make a partial closure to bind all arguments to `fun`
+except the coordinate dependence.
+* These functions expect local coordinates `z` in a `c_dim`-dimensional space, with the 
+real and imaginary parts concatenated to form a real-valued `2*c_dim` vector, `p = [Re(z); Im(z)]`.
+
+!!! info
+    When transforming functions which compute derivatives of some `fun` passed as an input, you will need to either:
+
+    * In the case of `jit`, specify that `fun` is a static argument.
+    * Wrap `fun` in a `jax.tree_util.Partial` closure to make it compatible with Jax transformations.
+
+    See the below example.
+
+!!! example
+    ``` py
+    import jax
+    import jax.numpy as jnp
+    fun = lambda x: jnp.sum(jnp.cos(x))
+
+    >>> jax.jit(del_z, static_argnums=(1,))(p, fun)  # ok
+    >>> jax.jit(del_z)(p, jax.tree_util.Partial(fun))  # ok
+    >>> jax.jit(del_z)(p, fun)  # TypeError
+    ```
 """
 
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, jacfwd
 
-from jaxtyping import Array, Float, Complex, ArrayLike
 from functools import partial
 from typing import Callable, Sequence
+from jaxtyping import Array, Float, Complex, ArrayLike
 
 # custom
 from .utils import math_utils
 
-# def greet(name: str) -> str:
-#     """Greet someone.
-
-#     Parameters
-#     ----------
-#     name
-#         The name of the person to greet.
-
-#     Returns
-#     -------
-#     A greeting message.
-#     """
-#     return f"Hello {name}!"
-
-def del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Array:
+def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."], Array]], *args) -> Complex[Array, "... i"]:
     r"""Holomorphic derivative of a function.
 
     Parameters
@@ -72,7 +82,7 @@ def del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Array:
     
     return jnp.squeeze(dfun_dz)
 
-def del_bar_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Array:
+def del_bar_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *args) -> Complex[Array, "... i"]:
     r"""Anti-holomorphic derivative of a function.
 
     Parameters
@@ -98,13 +108,10 @@ def del_bar_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args) -> Arr
     return jnp.squeeze(dfun_dz_bar)
 
 
-@partial(jit, static_argnums=(1,))
-def del_z_bar_del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args, 
-                    wide: bool = False) -> Array:
-    r"""Computes ddbar of a given function.
-    
-    Expects functions with real domain. Computes the full Hessian matrix corresponding to 
-    $\bar{\partial} \partial f$
+def del_z_bar_del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *args, 
+                    wide: bool = False) -> Complex[Array, "... i i"]:
+    r"""Computes the composition $\partial \circ \overline{\partial}$ of a given function. Note this 
+    coincides with the Hessian $\nabla df$ on a complex manifold.
     
     Parameters
     ----------
@@ -113,7 +120,8 @@ def del_z_bar_del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args,
     fun : callable
         Locally defined function fun: $\mathbb{R}^m -> \mathbb{C}^{a,b,c...}$ sending real-valued 
         inputs to complex-valued outputs
-    wide : Flag to use reverse-mode autodiff if function is wide, i.e. if the output of 
+    wide : bool
+        Flag to use reverse-mode autodiff if function is wide, i.e. if the output of 
         `fun` is a scalar. 
     Returns
     -------
@@ -139,11 +147,13 @@ def del_z_bar_del_z(p: Float[Array, "i"], fun: Callable[[Array], Array], *args,
 
     return 0.25 * jnp.squeeze(jax.lax.complex(d2f_dx2 + d2f_dy2, d2f_dydx - d2f_dxdy))
 
-@partial(jit, static_argnums=(1,))
-def christoffel_symbols_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                               pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
-    r"""Returns Levi-Civita pullback holomorphic connection, with support for variety $\iota: X \hookrightarrow P^n$.
 
+def christoffel_symbols_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
+                               pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j j"]:
+    r"""Returns holomorphic Levi-Civita connection coefficients, with optional 
+    support for variety $\iota: X \hookrightarrow \mathbb{P}^n$.
+    Schematically, if $g$ is the metric tensor,
+    $$ \Gamma \sim g^{-1} \cdot \partial g~. $$
     Parameters
     ----------
     p : array_like  
@@ -161,7 +171,7 @@ def christoffel_symbols_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array]
     Other Parameters
     ----------------
     pullbacks : array_like, optional
-        Pullback tensor from ambient to projective variety. If supplied, computes Christoffels
+        Pulllback matrices from ambient to projective variety. If supplied, computes Christoffels
         on the variety.
     """
     
@@ -176,19 +186,23 @@ def christoffel_symbols_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array]
     return gamma_holo 
 
 @partial(jit, static_argnums=(1,))
-def christoffel_symbols_kahler_antiholo(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                               pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
-    r"""Returns Levi-Civita pullback antiholomorphic connection, with support for on variety 
+def _christoffel_symbols_kahler_antiholo(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
+                               pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j j"]:
+    r"""Returns Levi-Civita pullback antiholomorphic connection, with support on variety 
     $\iota: X \hookrightarrow P^n$.
     """
     return jnp.conjugate(christoffel_symbols_kahler(p, metric_fn, pullbacks))
 
-@partial(jit, static_argnums=(1,3))
+@partial(jit, static_argnums=(3,))
 def riemann_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                               pullbacks: Complex[Array, "cy_dim i"] = None,
-                               return_aux: bool = False) -> Array | Sequence[Array]:
+                          pullbacks: Complex[Array, "cy_dim i"] = None,
+                          return_aux: bool = False) -> Complex[Array, "j j j j"] | Sequence[Array]:
     # TODO: VERIFY SYMMETRIES
-    r"""Returns Riemann tensor on a Kähler manifold, with support for variety $\iota: X \hookrightarrow P^n$.
+    r"""Returns Riemann curvature tensor on a Kähler manifold, with optional support for variety $\iota: X \hookrightarrow \mathbb{P}^n$.
+    This can also be used to construct the Riemann tensor on a real manifold by omission of the imaginary part of `p`. Schematically,
+    $$
+    \textsf{Riem} \sim \partial \Gamma + \Gamma \Gamma ~.
+    $$
     Parameters
     ----------
     p : array_like  
@@ -208,7 +222,7 @@ def riemann_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Arr
     Other Parameters
     ----------------
     pullbacks : array_like, optional
-        Pullback tensor from ambient to projective variety. If supplied, computes Riemann tensor
+        Pulllback matrices from ambient to projective variety. If supplied, computes Riemann tensor
         on the variety.
     """
 
@@ -229,9 +243,10 @@ def riemann_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Arr
 
 @partial(jit, static_argnums=(1,))
 def ricci_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                        pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
+                        pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j"]:
     # TODO: VERIFY SYMMETRIES
-    r"""Returns Ricci tensor on a Kähler manifold, with support for variety $\iota: X \hookrightarrow P^n$.
+    r"""Returns Ricci curvature tensor on a Kähler manifold, with optional support for variety 
+    $\iota: X \hookrightarrow \mathbb{P}^n$.
     Parameters
     ----------
     p : array_like  
@@ -245,7 +260,7 @@ def ricci_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array
     Other Parameters
     ----------------
     pullbacks : array_like, optional
-        Pullback tensor from ambient to projective variety. If supplied, computes Ricci tensor
+        Pulllback matrices from ambient to projective variety. If supplied, computes Ricci tensor
         on the variety.
     See Also
     --------
@@ -258,11 +273,12 @@ def ricci_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array
     
     return ricci_tensor
 
-@partial(jit, static_argnums=(1,))
+@jit
 def ricci_form_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                      pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
-    r""" Returns Ricci form on a Kähler manifold, with support for variety $\iota: X \hookrightarrow P^n$. 
-    Componentwise, $\rho_{\mu\bar{\nu}} = i R_{\mu \bar{\nu}}$.
+                      pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j"]:
+    r""" Returns Ricci form $\rho$ on a Kähler manifold, with support for variety $\iota: X \hookrightarrow \mathbb{P}^n$. 
+    Componentwise, $\rho_{\mu\bar{\nu}} = i R_{\mu \bar{\nu}}$, and
+    $$ \rho = \partial \overline{\partial} \log \det g~. $$
     Parameters
     ----------
     p : array_like  
@@ -276,7 +292,7 @@ def ricci_form_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array],
     Other Parameters
     ----------------
     pullbacks : array_like, optional
-        Pullback tensor from ambient to projective variety. If supplied, computes Ricci tensor
+        Pulllback matrices from ambient to projective variety. If supplied, computes Ricci tensor
         on the variety.
     """
     ricci_form = -1.j * del_z_bar_del_z(p, partial(math_utils.log_det_fn, g=metric_fn))
@@ -289,8 +305,8 @@ def ricci_form_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array],
 
 @partial(jit, static_argnums=(1,))
 def ricci_scalar(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                 pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
-    r""" Returns Ricci scalar on a Kähler manifold, with support for variety $\iota: X \hookrightarrow P^n$. 
+                 pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, ""]:
+    r""" Returns Ricci scalar on a Kähler manifold, with support for variety $\iota: X \hookrightarrow \mathbb{P}^n$. 
     Parameters
     ----------
     p : array_like  
@@ -304,7 +320,7 @@ def ricci_scalar(p: Float[Array, "i"], metric_fn: Callable[[Array], Array],
     Other Parameters
     ----------------
     pullbacks : array_like, optional
-        Pullback tensor from ambient to projective variety. If supplied, computes Ricci tensor
+        Pulllback matrices from ambient to projective variety. If supplied, computes Ricci tensor
         on the variety.
     """
     g_herm = metric_fn(p)
@@ -316,12 +332,7 @@ def ricci_scalar(p: Float[Array, "i"], metric_fn: Callable[[Array], Array],
 
 @partial(jit, static_argnums=(1,))
 def ricci_scalar_from_form(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
-                           pullbacks: Complex[Array, "cy_dim i"] = None) -> Array:
-    r""" 
-    See Also
-    --------
-    `ricci_scalar`.
-    """
+                           pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, ""]:
     g_herm = metric_fn(p)
     ricci_form = ricci_form_kahler(p, metric_fn, pullbacks)  # Ricci form in ambient space
     ricci_tensor = -1.j * ricci_form
