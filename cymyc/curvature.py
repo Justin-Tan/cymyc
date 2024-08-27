@@ -41,7 +41,7 @@ from jaxtyping import Array, Float, Complex, ArrayLike
 # custom
 from .utils import math_utils
 
-def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."], Array]], *args) -> Complex[Array, "... i"]:
+def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *args) -> Complex[Array, "... i"]:
     r"""Holomorphic derivative of a function.
 
     Parameters
