@@ -8,9 +8,9 @@ __pycache__/
 *.ipynb
 **/*.ipynb
 # exceptions
-!examples/curvature.ipynb
-!examples/metric_approx.ipynb
-!examples/harmonic.ipynb
+!docs/examples/curvature.ipynb
+!docs/examples/metric_approx.ipynb
+!docs/examples/harmonic.ipynb
 
 # Custom
 *.log
