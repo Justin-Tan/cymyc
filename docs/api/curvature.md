@@ -1,2 +1,2 @@
-::: src.curvature
+::: cymyc.curvature
     handler: python
