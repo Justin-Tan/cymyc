@@ -1,4 +1,4 @@
-# CYMYC 
+# CYMYC
 
 `cymyc` is a library for numerical differential geometry on Calabi-Yau manifolds written in JAX, enabling performant:
 
@@ -56,7 +56,7 @@ This codebase was used to generate the 'experimental' results for the following 
 
 ## Related libraries / Acknowledgements
 
-We would like to acknowledge the authors of the [cymetric](https://github.com/pythoncymetric/cymetric) library ([Larfors et. al. (2022)](https://iopscience.iop.org/article/10.1088/2632-2153/ac8e4e/meta)), whose excellent work this library builds upon.
+We would like to acknowledge the authors of the [cymetric](https://github.com/pythoncymetric/cymetric) library ([Larfors et. al. (2022)](https://iopscience.iop.org/article/10.1088/2632-2153/ac8e4e/meta)).
 
 **Numerical metrics on Calabi-Yaus**
 
