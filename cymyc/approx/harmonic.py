@@ -875,8 +875,8 @@ class HarmonicFull(Harmonic):
 
         ones_mask = jnp.logical_not(jnp.isclose(p, jax.lax.complex(1.,0.)))
         dQdz_homo = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p, dQdz_monomials, dQdz_coeffs)
-        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None))(
-            p, dQdz_homo, self.n_hyper, self.n_homo_coords)
+        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None,None))(
+            p, dQdz_homo, self.n_hyper, self.n_homo_coords, self.ambient)
 
         # get Lie derivative of Ω along all diffeomorphism directions [..., h_{21}, n_inhomo_coords, n_homo_coords]
         _, dzeta_dzbar = vmap(self.zeta_jacobian_complete)(p)

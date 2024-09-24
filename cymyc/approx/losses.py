@@ -314,7 +314,7 @@ def ma_proportionality(p, weights, config):
     Calculates proportionality constant between the rival volume forms $\Omega \wedge \bar{\Omega}$ and $\omega^n$. 
     """
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         get_metadata = partial(alg_geo.compute_integration_weights, config.dQdz_monomials, config.dQdz_coeffs, 
                 cy_dim=config.cy_dim)
         g_FS_fn = fubini_study.fubini_study_metric_homo_pb_precompute

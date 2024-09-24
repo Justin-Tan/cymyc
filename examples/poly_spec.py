@@ -38,10 +38,60 @@ def tian_yau_spec():
 
     return monomials, cy_dim, kmoduli, ambient
 
+def bicubic_spec():
+    monomials = np.asarray([
+        [3, 0, 0, 3, 0, 0],  # 4 * x0^3 * y0^3
+        [0, 3, 0, 3, 0, 0],  # 2 * x0^3 * y1^3
+        [0, 0, 3, 3, 0, 0],  # 1 * x0^3 * y2^3
+        [3, 0, 0, 0, 3, 0],  # 6 * x1^3 * y0^3
+        [0, 3, 0, 0, 3, 0],  # 5 * x1^3 * y1^3
+        [0, 0, 3, 0, 3, 0],  # 2 * x1^3 * y2^3
+        [3, 0, 0, 0, 0, 3],  # 9 * x2^3 * y0^3
+        [0, 3, 0, 0, 0, 3],  # 6 * x2^3 * y1^3
+        [0, 0, 3, 0, 0, 3],  # 4 * x2^3 * y2^3
+        [1, 1, 1, 1, 1, 1],  # -3 * ψ * x0 * x1 * x2 * y0 * y1 * y2
+    ], dtype=np.int64)
+    monomials = [monomials]
+
+    cy_dim = 3
+    kmoduli = np.ones(2)
+    # kmoduli = np.array([1,0])
+    ambient = np.array([2,2])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def bicubic_coefficients(psi):
+    coefficients = [np.asarray([4, 6, 9, 2, 5, 6, 1, 2, 4, -3 * psi])]
+    return coefficients
+
+def quarti_quadric_spec():
+    monomials = np.asarray([
+        [4, 0, 0, 0, 2, 0],
+        [0, 4, 0, 0, 2, 0],
+        [0, 0, 4, 0, 2, 0],
+        [0, 0, 0, 4, 2, 0], 
+        [4, 0, 0, 0, 0, 2],
+        [0, 4, 0, 0, 0, 2], 
+        [0, 0, 4, 0, 0, 2],
+        [0, 0, 0, 4, 0, 2],
+        [1, 1, 1, 1, 1, 1],
+    ], dtype=np.int64)
+    monomials = [monomials]
+    
+    cy_dim = 3
+    # kmoduli = np.ones(2, dtype=np.complex64)
+    kmoduli = np.array([5,10], dtype=np.complex64)
+    ambient = np.array([3,1])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def quarti_quadric_coefficients(psi):
+    coefficients = [np.asarray([1, 1, 1, 1, 1, 2, -1, -2, -4 * psi])]
+    return coefficients
+
 def tian_yau_coefficients(psi):
     coefficients = [np.append(np.ones(4), -3. * psi), np.ones(4), np.ones(4)]
     return coefficients
-
 
 def tian_yau_KM_spec():
     # Based off deformations in Kalara-Mohapatra paper

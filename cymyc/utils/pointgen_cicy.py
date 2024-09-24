@@ -39,7 +39,7 @@ from .. import alg_geo, dataloading, fubini_study
 class PointGenerator:
      
     def __init__(self, key: random.PRNGKey, cy_dim: int, monomials: np.array, 
-                 coefficients: np.array, ambient: np.array):
+                 ambient: np.array, coefficients: np.array, kmoduli: np.array = None):
         """
         Finds zero locus of a finite number of homogeneous polynomials in
         product of projective spaces. 
@@ -62,6 +62,11 @@ class PointGenerator:
         self.conf_mat, p_conf_mat = self._configuration_matrix(monomials, ambient) 
         self.t_degrees = self._find_degrees(ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
+
+        if kmoduli is None:
+            self.kmoduli = np.ones(len(ambient))
+        else:
+            self.kmoduli = kmoduli
 
         self.METHOD = 'lm'
         self.all_monos, self.all_coeffs = jnp.concatenate(monomials), jnp.concatenate(coefficients)
@@ -374,7 +379,7 @@ class PointGenerator:
         return p
     
     def compute_integration_parameters(self, cicy_pts, n_p, v_p):
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (len(self.ambient) == 1):
             get_metadata = partial(alg_geo.compute_integration_weights, cy_dim=self.cy_dim)
             det_g_FS_fn = fubini_study.det_fubini_study_pb
         else:
@@ -388,6 +393,7 @@ class PointGenerator:
             det_g_FS_fn = partial(fubini_study.det_fubini_study_pb_cicy,
                 n_coords    = self.n_coords,
                 ambient     = tuple(self.ambient),
+                k_moduli    = self.kmoduli,
                 cdtype      = np.complex128)
         get_metadata = jit(get_metadata)
 
@@ -398,6 +404,7 @@ class PointGenerator:
         
         # TODO: Add hypersurface support to 'pointgen'
         _n = 0
+        print(f'Using kmoduli, {self.kmoduli}')
         for data in tqdm(data_batched):
             _p = data
             w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p, self.dQdz_monomials, self.dQdz_coeffs)
@@ -483,15 +490,19 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.X24_spec  # tian_yau_KM_spec
-    coeff_fn = poly_spec.X24_coefficients  # tian_yau_KM_coefficients
+    #poly_specification = poly_spec.X33_spec  # tian_yau_KM_spec
+    #coeff_fn = poly_spec.X33_coefficients  # tian_yau_KM_coefficients
+    #poly_specification = poly_spec.bicubic_spec
+    #coeff_fn = poly_spec.bicubic_coefficients
+    poly_specification = poly_spec.quarti_quadric_spec
+    coeff_fn = poly_spec.quarti_quadric_coefficients
     psi = args.psi
-    if psi is None: psi = 0.5
+    if psi is None: psi = 0.0
     coefficients = coeff_fn(psi)
     # ========================
 
     monomials, cy_dim, kmoduli, ambient = poly_specification()
-    pg_cicy = PointGenerator(key, cy_dim, monomials, coefficients, ambient)
+    pg_cicy = PointGenerator(key, cy_dim, monomials, ambient, coefficients, kmoduli)
     dQdz_monomials, dQdz_coeffs = pg_cicy.dQdz_monomials, pg_cicy.dQdz_coeffs
     
     # generate points and integration data
