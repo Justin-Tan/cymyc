@@ -196,7 +196,8 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
                 p_ambient_i = math_utils.to_real(p_ambient_i)
                 spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
 
-            x = jnp.stack(spectral_out, axis=-1).reshape(-1)
+            # x = jnp.stack(spectral_out, axis=-1).reshape(-1)
+            x = jnp.concatenate(spectral_out, axis=-1).reshape(-1)
         
         for i, layer in enumerate(self.layers):
             x = layer(x)
@@ -318,7 +319,7 @@ def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
     print(f'Compiling {phi_head.__qualname__}')
     n_units = [params[k]['kernel'].shape[-1] for k in params.keys()][:-1]
 
-    if n_hyper > 1:
+    if (n_hyper > 1) or (len(ambient) > 1):
         return LearnedVector_spectral_nn_CICY(p.shape[-1]//2, ambient, n_units, n_out, 
                 use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
 
@@ -396,7 +397,7 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
-    if config.n_hyper > 1:
+    if (config.n_hyper > 1) or (len(config.ambient) > 1):
         g_FS_fn = partial(fubini_study._fubini_study_metric_homo_gen_pb_cicy, 
                     dQdz_monomials=config.dQdz_monomials, 
                     dQdz_coeffs=config.dQdz_coeffs, 
@@ -404,7 +405,7 @@ def helper_fns(config):
                     cy_dim=config.cy_dim, 
                     n_coords=config.n_coords,
                     ambient=tuple(config.ambient), 
-                    k_moduli=None,
+                    k_moduli=config.kmoduli,
                     ambient_out=True,
                     cdtype=config.cdtype)
         pb_fn = partial(alg_geo._pullbacks_cicy,

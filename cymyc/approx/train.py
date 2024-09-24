@@ -89,7 +89,7 @@ if __name__ == '__main__':
     dataset_size = A_train[0].shape[0]
 
     # initialize model
-    if config.n_hyper > 1:
+    if (config.n_hyper > 1) or (len(config.ambient) > 1):
         model_class = models.LearnedVector_spectral_nn_CICY
     else:
         model_class = models.LearnedVector_spectral_nn
@@ -101,6 +101,8 @@ if __name__ == '__main__':
             optax.adamw(config.learning_rate))
     # optimizer = optax.adamw(config.learning_rate)
 
+    _, _, kmoduli, _ = config.poly_specification()
+    config.kmoduli = kmoduli
     g_FS_fn, g_correction_fn, *_ = models.helper_fns(config)
     params, opt_state, init_rng = create_train_state(init_rng, model, optimizer, data_dim=config.n_ambient_coords * 2)
     # partial closure
@@ -109,6 +111,8 @@ if __name__ == '__main__':
     t0 = time.time()
     logger.info(f'Using device(s), {jax.devices()}')
     logger.info(f'KAPPA: {config.kappa}')
+    logger.info(f"Complex structure moduli (1D): {psi}, Kaehler moduli: {config.kmoduli}, "
+           f"Kaehler moduli ambient: {config.kmoduli_ambient}")
     param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
     logger.info(f'Params (Count: {param_count})=========>>>')
     logger.info(jax.tree_util.tree_map(lambda x: x.shape, params))

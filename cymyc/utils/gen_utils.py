@@ -221,7 +221,7 @@ def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz',
     t_degrees = math_utils._find_degrees(config.ambient, config.n_hyper, conf_mat)
     config.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(config.cy_dim, config.ambient, t_degrees)
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         dQdz_info = alg_geo.dQdz_poly(config.n_coords, config.monomials, coefficients)
         config.dQdz_monomials, config.dQdz_coeffs = dQdz_info
     else:
@@ -252,7 +252,7 @@ def read_metadata(config, save=True):
     d.update(dataset_metadata)
     config = Struct(**d)
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         config.dQdz_monomials = config.dQdz_monomials.astype(config.cdtype)
         config.dQdz_coeffs = config.dQdz_coeffs.astype(config.cdtype)
     else:
