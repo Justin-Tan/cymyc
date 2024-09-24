@@ -11,7 +11,7 @@ Here we take as example the mirror to the manifold $\mathbb{P}^5[2,4]$. This is 
     p_2 &= Z_4^3 + Z_5^3 +Z_6^3 - 3 \psi Z_1Z_2Z_3~.
 \end{align*}
 
- This manifold has a single complex structure modulus - see [this article](https://arxiv.org/abs/1903.00596) for more details. We choose the point $\psi = 1/2$ in moduli space. The following script samples 320000 points from the above zero locus, together with 64000 validation points, saving it to the directory `data/X24`. 
+ This manifold has a single complex structure modulus - see [this article](https://arxiv.org/abs/1903.00596) for more details. We choose the point $\psi = 1/2$ in complex structure moduli space. The following script samples 320000 points from the above zero locus, together with 64000 validation points, saving it to the directory `data/X24`. 
 
 ```python
 python3 -m cymyc.utils.pointgen_cicy -o data/X24 -n_p 320000 -val 0.2 -psi 0.5
