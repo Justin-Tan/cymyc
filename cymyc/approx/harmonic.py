@@ -51,7 +51,7 @@ class Harmonic(wp.WP):
         self.n_ambient = len(self.ambient)
         self.toggle_transition_loss = False
 
-        if self.n_hyper > 1:
+        if (self.n_hyper > 1) or (len(self.ambient) > 1):
             self.fs_metric_fn = partial(fubini_study._fubini_study_metric_homo_gen_pb_cicy,
                         dQdz_monomials=self.dQdz_monomials, dQdz_coeffs=self.dQdz_coeffs,
                         n_hyper=self.n_hyper, cy_dim=self.cy_dim, n_coords=self.n_homo_coords,
@@ -522,7 +522,7 @@ class Harmonic(wp.WP):
         patch_idx = jnp.reshape(patch_idx, (self.n_projective,))
         current_patch_mask = jnp.logical_not(self._idx_to_mask(patch_idx))
 
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (self.n_ambient == 1):
             other_patches = utils._generate_all_patches(self.n_homo_coords, self._transitions, self.degrees)
             other_patches = other_patches[elim_idx]  # patches with elim_idx removed.
         else:  # need to generalize to product of projective spaces
@@ -949,7 +949,7 @@ class HarmonicFull(Harmonic):
         patch_idx = jnp.reshape(patch_idx, (self.n_projective,))
         current_patch_mask = jnp.logical_not(self._idx_to_mask(patch_idx))
 
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (self.n_ambient == 1):
             other_patches = utils._generate_all_patches(self.n_homo_coords, self._transitions, self.degrees)
             other_patches = other_patches[elim_idx]  # patches with elim_idx removed.
         else:  # need to generalize to product of projective spaces
