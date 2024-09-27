@@ -54,14 +54,39 @@ def bicubic_spec():
     monomials = [monomials]
 
     cy_dim = 3
-    kmoduli = np.ones(2)
-    # kmoduli = np.array([1,0])
+    kmoduli = np.ones(2, dtype=np.complex64)
+    # kmoduli = np.array([1,0], dtype=np.complex64)
     ambient = np.array([2,2])
 
     return monomials, cy_dim, kmoduli, ambient
 
 def bicubic_coefficients(psi):
     coefficients = [np.asarray([4, 6, 9, 2, 5, 6, 1, 2, 4, -3 * psi])]
+    return coefficients
+
+def bicubic_redux_spec():
+    monomials = np.asarray([
+        [3, 0, 0, 3, 0, 0],  # 4 * x0^3 * y0^3
+        [0, 3, 0, 0, 3, 0],  # 2 * x0^3 * y1^3
+        [0, 0, 3, 0, 0, 3],  # 1 * x0^3 * y2^3
+        [3, 0, 0, 0, 3, 0],  # 6 * x1^3 * y0^3
+        [0, 3, 0, 0, 0, 3],  # 5 * x1^3 * y1^3
+        [0, 0, 3, 3, 0, 0],  # 2 * x1^3 * y2^3
+        [3, 0, 0, 0, 0, 3],  # 9 * x2^3 * y0^3
+        [0, 3, 0, 3, 0, 0],  # 6 * x2^3 * y1^3
+        [0, 0, 3, 0, 3, 0],  # 4 * x2^3 * y2^3
+    ], dtype=np.int64)
+    monomials = [monomials]
+
+    cy_dim = 3
+    kmoduli = np.ones(2, dtype=np.complex64)
+    # kmoduli = np.array([1,0], dtype=np.complex64)
+    ambient = np.array([2,2])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def bicubic_redux_coefficients(psi):
+    coefficients = [np.concatenate((np.ones(3), psi * np.ones(6)))]
     return coefficients
 
 def quarti_quadric_spec():
@@ -79,8 +104,9 @@ def quarti_quadric_spec():
     monomials = [monomials]
     
     cy_dim = 3
-    # kmoduli = np.ones(2, dtype=np.complex64)
-    kmoduli = np.array([5,10], dtype=np.complex64)
+    #kmoduli = np.ones(2, dtype=np.complex64)
+    t0, t1 = 2,1
+    kmoduli = np.array([t0,t1], dtype=np.complex64)
     ambient = np.array([3,1])
 
     return monomials, cy_dim, kmoduli, ambient
@@ -329,6 +355,10 @@ def X24_deformation(p, precision=np.complex128):
     d2 = jnp.einsum("...a,aj->...j", jnp.expand_dims(p[0]*p[1]*p[2]*p[3], axis=-1),
                       jnp.asarray([[0.,-4.]], precision))
     return d1 + d2
+
+def quarti_quadric_deformation(p, precision=np.complex128):
+    d = jnp.expand_dims(jnp.prod(p, dtype=precision), axis=-1)
+    return d
 
 def tian_yau_yukawas():
     kappa_deformation_idx = [
