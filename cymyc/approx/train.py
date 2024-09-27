@@ -18,6 +18,7 @@ from collections import defaultdict
 
 # Custom imports
 from . import losses
+from .. import alg_geo
 from ..utils import gen_utils as utils
 cpu_device = jax.devices('cpu')[0]
 
@@ -78,6 +79,8 @@ if __name__ == '__main__':
     # Override default arguments from config file with provided command line arguments
     config = utils.override_default_args(cmd_args, config)
     config = utils.read_metadata(config)  # load dataset metadata
+    *_, kmoduli, _ = config.poly_specification()
+    config.kmoduli = kmoduli
     storage = defaultdict(list)
     logger = utils.logger_setup(config.name, filepath=os.path.abspath(__file__))
 
@@ -87,6 +90,11 @@ if __name__ == '__main__':
     A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(np_rng, config.data_path, 
             config.eval_batch_size, logger=logger)
     dataset_size = A_train[0].shape[0]
+
+    # compute Monge-Ampere proportionality constant from data, this is Kaehler-moduli dependent
+    kappa = alg_geo.compute_train_kappa(train_loader, dataset_size, config)
+    logger.info(f'Overriding loaded κ: {config.kappa:.5f} with dataset κ: {kappa:.5f}')
+    config.kappa = kappa
 
     # initialize model
     if (config.n_hyper > 1) or (len(config.ambient) > 1):
@@ -101,8 +109,6 @@ if __name__ == '__main__':
             optax.adamw(config.learning_rate))
     # optimizer = optax.adamw(config.learning_rate)
 
-    _, _, kmoduli, _ = config.poly_specification()
-    config.kmoduli = kmoduli
     g_FS_fn, g_correction_fn, *_ = models.helper_fns(config)
     params, opt_state, init_rng = create_train_state(init_rng, model, optimizer, data_dim=config.n_ambient_coords * 2)
     # partial closure
@@ -110,7 +116,6 @@ if __name__ == '__main__':
 
     t0 = time.time()
     logger.info(f'Using device(s), {jax.devices()}')
-    logger.info(f'KAPPA: {config.kappa}')
     logger.info(f"Complex structure moduli (1D): {psi}, Kaehler moduli: {config.kmoduli}, "
            f"Kaehler moduli ambient: {config.kmoduli_ambient}")
     param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))

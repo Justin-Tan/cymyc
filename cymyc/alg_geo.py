@@ -454,4 +454,48 @@ def compute_integration_weights(points, dQdz_monomials, dQdz_coefficients, cy_di
     return jnp.squeeze(weights), jnp.squeeze(pbs), jnp.squeeze(dVol_omega), jnp.squeeze(dVol_ref)
 
 
-    
+def compute_train_kappa(train_loader, dataset_size, config):
+    """
+    Compute Monge-Ampere proportionality constant using training data only.
+    """
+    from tqdm import tqdm
+    wrapped_train_loader = tqdm(train_loader, desc='Computing κ', total=dataset_size//config.batch_size,
+                                colour='green', mininterval=0.1)
+
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
+        get_metadata = partial(compute_integration_weights, cy_dim=config.cy_dim)
+        det_g_FS_fn = fubini_study.det_fubini_study_pb
+    else:
+        get_metadata = partial(_integration_weights_cicy,
+            n_hyper             = config.n_hyper,
+            cy_dim              = config.cy_dim,
+            n_coords            = config.n_coords,
+            ambient             = config.ambient,
+            kmoduli_ambient     = config.kmoduli_ambient)
+
+        det_g_FS_fn = partial(fubini_study.det_fubini_study_pb_cicy,
+            n_coords    = config.n_coords,
+            ambient     = tuple(config.ambient),
+            k_moduli    = config.kmoduli,
+            cdtype      = np.complex128)
+    get_metadata = jit(get_metadata)
+    _n, vol_Omega, vol_g = 0, 0., 0.
+    for data in wrapped_train_loader:
+        _p, *_ = data
+        B = _p.shape[0]
+        _p_c = math_utils.to_complex(_p)
+        w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p_c, config.dQdz_monomials, config.dQdz_coeffs)
+
+        # compute Monge-Ampere proportionality constant
+        _det_g_FS_pb = vmap(det_g_FS_fn)(_p, pb)
+        _vol_g = jnp.mean(w * _det_g_FS_pb / _dVol_Omega).item()
+        vol_g = math_utils.online_update(vol_g, _vol_g, _n, B)
+
+        _vol_Omega = jnp.mean(w).item()
+        vol_Omega = math_utils.online_update(vol_Omega, _vol_Omega, _n, B)
+        _n += B
+
+    kappa = vol_g / vol_Omega
+    return kappa
+
+

@@ -402,7 +402,6 @@ class PointGenerator:
         weights, pullbacks, dVol_Omegas = [], [], []
         vol_Omega, vol_g = 0., 0.
         
-        # TODO: Add hypersurface support to 'pointgen'
         _n = 0
         print(f'Using kmoduli, {self.kmoduli}')
         for data in tqdm(data_batched):
@@ -492,8 +491,8 @@ if __name__ == "__main__":
     # ========================
     #poly_specification = poly_spec.X33_spec  # tian_yau_KM_spec
     #coeff_fn = poly_spec.X33_coefficients  # tian_yau_KM_coefficients
-    #poly_specification = poly_spec.bicubic_spec
-    #coeff_fn = poly_spec.bicubic_coefficients
+    #poly_specification = poly_spec.bicubic_redux_spec
+    #coeff_fn = poly_spec.bicubic_redux_coefficients
     poly_specification = poly_spec.quarti_quadric_spec
     coeff_fn = poly_spec.quarti_quadric_coefficients
     psi = args.psi

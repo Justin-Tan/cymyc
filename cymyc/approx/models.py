@@ -197,7 +197,7 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
                 spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
 
             # x = jnp.stack(spectral_out, axis=-1).reshape(-1)
-            x = jnp.concatenate(spectral_out, axis=-1).reshape(-1)
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
         
         for i, layer in enumerate(self.layers):
             x = layer(x)
@@ -273,7 +273,8 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
             p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
             spectral_out.append(self.spectral_layer(math_utils.to_real(p_ambient_i), self.dims[i]))
 
-        x = jnp.stack(spectral_out, axis=-1).reshape(-1)     
+        #  x = jnp.stack(spectral_out, axis=-1).reshape(-1)     
+        x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
 
         for i, layer in enumerate(self.layers):
             x = layer(x)
