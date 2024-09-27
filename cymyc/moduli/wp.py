@@ -208,7 +208,7 @@ class WP:
         weights, pb, *_ = vmap(self.integration_weights_fn, in_axes=(0,None,None))(
             p, dQdz_monomials, dQdz_coeffs)
 
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (len(self.ambient) == 1):
             dQdz_monomials, dQdz_coeffs = [dQdz_monomials], [dQdz_coeffs]
             
         vol_Omega = jnp.mean(weights)

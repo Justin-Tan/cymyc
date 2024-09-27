@@ -98,7 +98,7 @@ if __name__ == '__main__':
     dataset_size = A_train[0].shape[0]
 
     # initialize model
-    if (config.n_hyper > 1): # or (len(config.ambient) > 1):
+    if (config.n_hyper > 1) or (len(config.ambient) > 1):
         model_class = models.LearnedVector_spectral_nn_CICY
         eta_model_class = models.CoeffNetwork_spectral_nn_CICY
         eta_model = eta_model_class(config.n_ambient_coords, config.ambient, config.n_units_harmonic,
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     monomials, cy_dim, kmoduli, ambient = config.poly_specification()
     coefficients = config.coeff_fn(psi)
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         monomials = [monomials]
         coefficients = [coefficients]
 
