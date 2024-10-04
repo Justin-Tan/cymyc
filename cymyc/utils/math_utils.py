@@ -155,7 +155,7 @@ def online_update_array(mu, x, n, B=1., S=None, _S=None):
     `S` provided.
     """
     Z_SCORE_THRESHOLD = 3
-    FREE_START = 2
+    FREE_START = 3
     mu = jnp.where(n==0, x, mu)
     mu_update = mu + (x - mu) * B / (n+B)
     # x = jnp.where(jnp.isnan, mu, x)

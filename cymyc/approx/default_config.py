@@ -42,7 +42,7 @@ class config(object):
     #coeff_fn = poly_spec.bicubic_redux_coefficients
     poly_specification = poly_spec.quarti_quadric_spec
     coeff_fn = poly_spec.quarti_quadric_coefficients
-    deformation_fn = partial(poly_spec.X24_deformation, precision=cdtype)
+    deformation_fn = partial(poly_spec.quarti_quadric_deformation, precision=cdtype)
 
     name = 'default'
     dataset = 'default'

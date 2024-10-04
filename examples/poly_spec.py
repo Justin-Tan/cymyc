@@ -105,7 +105,7 @@ def quarti_quadric_spec():
     
     cy_dim = 3
     #kmoduli = np.ones(2, dtype=np.complex64)
-    t0, t1 = 2,1
+    t0, t1 = 4, 2
     kmoduli = np.array([t0,t1], dtype=np.complex64)
     ambient = np.array([3,1])
 

@@ -245,9 +245,15 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
         self.n_asym, self.n_sym = self.param_counts[-1]
         self.n_eta_out = len(self.ambient) * self.n_asym * self.n_sym * 2
         self.layers = [nn.Dense(f) for f in self.n_units]
-        # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
-        self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.h_21, self.n_asym, self.n_sym), 
-                                             '...i, ...ihab->...hab', name='layers_coeffs')
+
+        self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
+        if self.common_ambient_space:
+            # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
+            self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.h_21, self.n_asym, self.n_sym), 
+                                                 '...i, ...ihab->...hab', name='layers_coeffs')
+        else:
+            self.coeff_layers = [ops.EinsumComplex((self.n_units[-1], self.h_21, pc[0], pc[1]), '...i, ...ihab->...hab',
+                                                   name=f'layers_coeffs_{i}') for i, pc in enumerate(self.param_counts)]
 
     @nn.compact
     def __call__(self, x: Float[Array, "i"]) -> Array:
@@ -281,10 +287,15 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
 
-        coeffs = self.coeff_layer(x)  # [..., n_A * h_{21}, n_asym, n_sym]
+        if self.common_ambient_space:
+            coeffs = self.coeff_layer(x)  # [..., n_A * h_{21}, n_asym, n_sym]
+            print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
+            return jnp.split(coeffs, len(self.ambient), axis=0)
+        else:
+            coeffs = [coeff_layer(x) for coeff_layer in self.coeff_layers]
+            print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
+            return coeffs
 
-        print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
-        return jnp.split(coeffs, len(self.ambient), axis=0)
 
 
 @partial(jit, static_argnums=(2,3,4,5,6))
