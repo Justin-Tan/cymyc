@@ -37,6 +37,7 @@ class Harmonic(wp.WP):
                  pb_fn: Callable, coeff_fn: Callable, psi: float):
         
         super().__init__(cy_dim, monomials, ambient)
+        jax.config.update("jax_enable_x64", False)
         self.h_21 = 1
         self.deformation = deformations[0]
         self.dQdz_monomials = dQdz_monomials
@@ -110,10 +111,8 @@ class Harmonic(wp.WP):
         n_homo_coords_i = np.array(self.ambient) + 1  # coords for each ambient space factor 
         param_counts = [(n_c*(n_c-1)//2, (n_c+1)*n_c//2) for n_c in n_homo_coords_i]
         n_asym, n_sym = param_counts[-1]
-        basis_forms_pb = jnp.empty((self.n_ambient * n_asym, self.cy_dim), dtype=np.complex64)
-        O2_s = jnp.empty((self.n_ambient * n_sym,), dtype=np.complex64)
 
-        # (h_{21}, n_asym, n_sym) * n_A
+        # (h_{21}, n_asym, n_sym) * n_A if all ambient space factors identical
         coeffs = models.coeff_head(p, params, self.n_homo_coords, tuple(self.ambient), self.h_21, activation)
         T_X_section = jnp.empty((self.h_21, self.cy_dim,), dtype=np.complex64)
         for i in range(len(self.ambient)):
@@ -128,11 +127,9 @@ class Harmonic(wp.WP):
             Z_dz_i_pb = jnp.einsum('...i, ...jk -> ...ikj', Z_i, pb_i)
             basis_form_i_pb = Z_dz_i_pb - jnp.einsum('...ijv->...jiv', Z_dz_i_pb)
             basis_form_i_pb_v = basis_form_i_pb[as_idx[0],as_idx[1],:]
-            basis_forms_pb = jax.lax.dynamic_update_slice(basis_forms_pb, basis_form_i_pb_v, (n_asym * i,0))
             
             O2_s_i = jnp.outer(Z_i,Z_i)
             O2_s_i_v = O2_s_i[jnp.triu_indices(n_c)] / Z_norm_sq_i**2
-            O2_s = jax.lax.dynamic_update_slice(O2_s, O2_s_i_v, (n_sym * i,))
 
             T_X_section += jnp.einsum('...hab, ...av, ...vu, ...b->...hu', coeffs[i], jnp.conjugate(basis_form_i_pb_v), 
                     g_inv, O2_s_i_v)
@@ -167,11 +164,10 @@ class Harmonic(wp.WP):
             Z_dz_i_pb = jnp.einsum('...i, ...jk -> ...ikj', Z_i, pb_i)
             basis_form_i_pb = Z_dz_i_pb - jnp.einsum('...ijv->...jiv', Z_dz_i_pb)
             basis_form_i_pb_v = basis_form_i_pb[as_idx[0],as_idx[1],:]
-            basis_forms_pb = jax.lax.dynamic_update_slice(basis_forms_pb, basis_form_i_pb_v, (n_asym * i,0))
+            print(f'{self.section_network_transformed.__qualname__}, basis_form shape', basis_form_i_pb.shape)
             
             O2_s_i = jnp.outer(Z_i,Z_i)
             O2_s_i_v = O2_s_i[jnp.triu_indices(n_c)] / Z_norm_sq_i**2
-            O2_s = jax.lax.dynamic_update_slice(O2_s, O2_s_i_v, (n_sym * i,))
             print(f'{self.section_network_transformed.__qualname__}, O2 shape', O2_s_i.shape)
 
             T_X_section += jnp.einsum('...hab, ...av, ...vu, ...b->...hu', coeffs[i], jnp.conjugate(basis_form_i_pb_v), 
@@ -396,7 +392,7 @@ class Harmonic(wp.WP):
         eta, form_ref, form_correction = vmap(self.harmonic_rep_breakdown, in_axes=(0,None))(p, params)
         G_wp_harmonic = self.wp_metric_harmonic(data, eta)
 
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (len(self.ambient) == 1):
             coefficients = self.coeff_fn(self.psi)
             dQdz_info = alg_geo.dQdz_poly(self.n_homo_coords, self.monomials[0], coefficients)
             dQdz_monomials, dQdz_coeffs = dQdz_info

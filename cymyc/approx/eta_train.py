@@ -109,7 +109,6 @@ if __name__ == '__main__':
     # load metric model
     g_model = model_class(config.n_ambient_coords, config.ambient, config.n_units)
     _params, init_rng = utils.random_params(init_rng, g_model, data_dim=config.n_ambient_coords * 2)
-    logger.info(g_model.tabulate(init_rng, jnp.ones([1, config.n_ambient_coords * 2])))
     g_params = utils.load_params(_params, config.metric_checkpoint)  # parameters for trained metric NN
     logger.info(g_model.tabulate(init_rng, jnp.ones([1, config.n_ambient_coords * 2])))
 
