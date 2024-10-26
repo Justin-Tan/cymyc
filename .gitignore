@@ -41,6 +41,8 @@ notebooks/
 test/
 *.slurm
 *.tex
+*.sh
+**/*.sh
 
 # C extensions
 *.so

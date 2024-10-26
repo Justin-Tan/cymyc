@@ -78,7 +78,7 @@ def aux_data_gen(files, poly_specification, coeff_fn, override=True, kappa_out=T
     t_degrees = math_utils._find_degrees(ambient, n_hyper, conf_mat)
     kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(cy_dim, ambient, t_degrees)
 
-    if n_hyper == 1:
+    if (n_hyper == 1) and (len(ambient) == 1):
         get_metadata = partial(alg_geo.compute_integration_weights, cy_dim=cy_dim)
         det_g_FS_fn = fubini_study.det_fubini_study_pb
     else:
@@ -103,7 +103,7 @@ def aux_data_gen(files, poly_specification, coeff_fn, override=True, kappa_out=T
 
             coefficients = coeff_fn(psi)
 
-            if n_hyper == 1:
+            if (n_hyper == 1) and (len(ambient) == 1):
                 dQdz_info = alg_geo.dQdz_poly(n_coords, monomials[0], coefficients)
                 dQdz_monomials, dQdz_coeffs = dQdz_info
             else:
