@@ -155,7 +155,7 @@ def online_update_array(mu, x, n, B=1., S=None, _S=None):
     `S` provided.
     """
     Z_SCORE_THRESHOLD = 3
-    FREE_START = 3
+    FREE_START = 5
     mu = jnp.where(n==0, x, mu)
     mu_update = mu + (x - mu) * B / (n+B)
     # x = jnp.where(jnp.isnan, mu, x)
@@ -265,3 +265,44 @@ def log_det_fn(p, g, *args):
    
     det_g = jnp.real(jnp.linalg.det(g(p, *args)))
     return jnp.log(det_g)
+
+def Pi(conf, kmoduli):
+    import sympy, functools
+    k, l = conf.shape[0], conf.shape[1]-1
+    Pns, degrees = conf[:,0], conf[:,1:]
+    prefactor = np.prod([math.factorial(n_i) for n_i in Pns])
+
+    Js = " ".join([f"J_{i}" for i in range(k)])
+    Js = np.array(sympy.symbols(Js))
+    _Js = np.expand_dims(Js, len(np.array(Js).shape))
+
+    ts = " ".join([f"t_{i}" for i in range(k)])
+    ts = np.array(sympy.symbols(ts))
+    
+    c_top_NX = np.prod(np.sum(degrees * _Js, axis=0))
+    c_X = (np.prod(np.power(np.array(1) + Js, Pns+1))) / np.prod(1 + np.sum(degrees * _Js, axis=0))
+
+    chi_terms = c_top_NX * c_X
+    c2_w_J_terms = chi_terms * np.sum(Js * ts)
+    vol_terms = chi_terms * np.power(np.sum(Js * ts), 3)
+    
+    if len(np.array(Js).shape) == 0:
+        Js = np.expand_dims(Js, 0)
+
+    _t = functools.reduce(sympy.diff, zip(Js, Pns), chi_terms)
+    chi = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor
+    assert type(chi) is sympy.core.numbers.Integer, 'Euler characteristic is not an integer!'
+    
+    _t = functools.reduce(sympy.diff, zip(Js, Pns), c2_w_J_terms)
+    c2_w_J = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor
+
+    _t = functools.reduce(sympy.diff, zip(Js, Pns), vol_terms)
+    vol = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor
+
+    if len(np.array(ts).shape) == 0:
+        ts = np.expand_dims(ts, 0)
+    if kmoduli is None: kmoduli = np.ones_like(ts)
+    canonical_vol = vol.subs(list(zip(ts, kmoduli)))
+    
+    # return chi, sympy.simplify(c2_w_J), sympy.simplify(vol), canonical_vol
+    return int(chi), str(sympy.simplify(c2_w_J)), str(sympy.simplify(vol)), float(canonical_vol)

@@ -154,7 +154,7 @@ if __name__ == '__main__':
     for epoch in range(int(config.n_epochs)):
 
         if config.periodic_eval is False:
-            val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+            val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
             storage = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, val_data, params, config, storage, logger, mode='VAL')
         
         if epoch > 0: 
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
             if config.periodic_eval is True:
                 if t % config.eval_interval == 0:
-                    val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
                     _ = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, data, params, config, storage, logger, mode='TRAIN')
                     storage = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, val_data, params, config, storage, logger, mode='VAL')
             wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)

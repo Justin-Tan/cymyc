@@ -96,6 +96,8 @@ def initialize_loaders_train(np_rng, data_path, batch_size, x_train_key='x_train
     p_train, p_val = data[x_train_key].astype(precision), data[x_val_key].astype(precision)
     y_train, y_val = data['y_train'].astype(precision), data['y_val'].astype(precision)
 
+    n_train, n_val = p_train.shape[0], p_val.shape[0]
+    assert (batch_size < n_train) and (batch_size < n_val), 'Batch size exceeds dataset size!'
     ds = data_loader((p_train, y_train[:,0], y_train[:,1]), batch_size, np_rng)
     ds_val = data_loader((p_val, y_val[:,0], y_val[:,1]), batch_size, np_rng)
 
@@ -117,7 +119,7 @@ def get_validation_data(val_loader, batch_size, A_val, np_rng):
     except StopIteration:
         val_loader = data_loader(A_val, batch_size, np_rng)
         val_data = next(val_loader)
-    return val_data
+    return val_loader, val_data
 
 
 def shuffle_ds(ds, seed):

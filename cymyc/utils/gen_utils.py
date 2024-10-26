@@ -203,9 +203,11 @@ def load_params(init_params, params_path):
     return params
 
 
-def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz', metadata_out='metadata.pkl'):
+def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz', metadata_out='metadata.pkl',
+                  topological_data=None):
     from . import math_utils
     from .. import alg_geo
+    import sympy as sp
 
     _d = dict(zip(('monomials', 'cy_dim', 'kmoduli', 'ambient'), poly_data))
     config = Struct(**_d)
@@ -234,6 +236,18 @@ def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz',
     config.kappa = kappa
     print(f'kappa: {kappa:.7f}')
 
+    if topological_data is not None:
+        config.chi = topological_data['chi']
+        config.vol = topological_data['vol']
+        config.c2_w_J = topological_data['c2_w_J']
+
+        vol = sp.sympify(config.vol)
+        ts = " ".join([f"t_{i}" for i in range(len(config.kmoduli))])
+        ts = np.array(sp.symbols(ts))
+
+        # config.canonical_vol = topological_data['canonical_vol']
+        config.canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
+
     _dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     config_d = _dictify(config)
 
@@ -242,8 +256,10 @@ def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz',
 
     return config
 
-def read_metadata(config, save=True):
+def read_metadata(config, kmoduli=None, save=True):
     
+    import sympy as sp
+
     metapath = os.path.join(config.metadata_path)
     with open(metapath, 'rb') as f:
         dataset_metadata = pickle.load(f)
@@ -258,6 +274,13 @@ def read_metadata(config, save=True):
     else:
         config.dQdz_monomials = [m.astype(config.cdtype) for m in config.dQdz_monomials]
         config.dQdz_coeffs = [c.astype(config.cdtype) for c in config.dQdz_coeffs]
+
+    if kmoduli is not None:
+        config.kmoduli = kmoduli
+        vol = sp.sympify(config.vol)
+        ts = " ".join([f"t_{i}" for i in range(len(config.kmoduli))])
+        ts = np.array(sp.symbols(ts))
+        config.canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
 
     if save is True: save_config(config)
     return config   

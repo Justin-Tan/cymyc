@@ -33,7 +33,7 @@ def tian_yau_spec():
     monomials = [monomials_1, monomials_2, monomials_3]
 
     cy_dim = 3
-    kmoduli = np.ones(2)
+    kmoduli = np.ones(2, dtype=np.complex64)
     ambient = np.array([3,3])
 
     return monomials, cy_dim, kmoduli, ambient
@@ -104,8 +104,8 @@ def quarti_quadric_spec():
     monomials = [monomials]
     
     cy_dim = 3
-    #kmoduli = np.ones(2, dtype=np.complex64)
-    t0, t1 = 4, 2
+    # kmoduli = 12 * np.ones(2, dtype=np.complex64)
+    t0, t1 = 12, 6
     kmoduli = np.array([t0,t1], dtype=np.complex64)
     ambient = np.array([3,1])
 
@@ -167,7 +167,7 @@ def schimmrigk_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(2)
+    kmoduli = np.ones(2, dtype=np.complex64)
     ambient = np.array([3,2])
     return monomials, cy_dim, kmoduli, ambient
 
@@ -196,7 +196,7 @@ def X33_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([5])
     return monomials, cy_dim, kmoduli, ambient
 
@@ -221,7 +221,7 @@ def X24_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([5])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -250,7 +250,7 @@ def X223_spec():
     monomials = [monomials_1, monomials_2, monomials_3]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([6])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -283,7 +283,7 @@ def X2222_spec():
     monomials = [monomials_1, monomials_2, monomials_3, monomials_4]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([7])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -304,7 +304,7 @@ def mirror_quintic_spec():
     ], dtype=np.int64)
 
     cy_dim, n_coords = 3, monomials.shape[-1]
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([4])
     degrees = ambient + 1
 
