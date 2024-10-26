@@ -38,7 +38,8 @@ def train_step(data, params, opt_state, metric_fn, optimizer, kappa):
 def callback(epoch, t0, t, test_data, params, metric_fn, g_FS_fn, 
              config, storage, logger, mode='TRAIN'):
 
-    loss_breakdown_dict = losses.loss_breakdown(test_data, params, metric_fn, g_FS_fn, config.kappa)
+    loss_breakdown_dict = losses.loss_breakdown(test_data, params, metric_fn, g_FS_fn, config.kappa,
+            config.canonical_vol)
     loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
     summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
 
@@ -78,9 +79,9 @@ if __name__ == '__main__':
 
     # Override default arguments from config file with provided command line arguments
     config = utils.override_default_args(cmd_args, config)
-    config = utils.read_metadata(config)  # load dataset metadata
     *_, kmoduli, _ = config.poly_specification()
     config.kmoduli = kmoduli
+    config = utils.read_metadata(config, config.kmoduli)  # load dataset metadata
     storage = defaultdict(list)
     logger = utils.logger_setup(config.name, filepath=os.path.abspath(__file__))
 
@@ -95,6 +96,11 @@ if __name__ == '__main__':
     kappa = alg_geo.compute_train_kappa(train_loader, dataset_size, config)
     logger.info(f'Overriding loaded κ: {config.kappa:.5f} with dataset κ: {kappa:.5f}')
     config.kappa = kappa
+    try:
+        logger.info(f'χ: {config.chi:.1f} | c2_w_J: {config.c2_w_J} | vol: {config.vol} | canonical_vol:'
+                f'{config.canonical_vol} | kmoduli: {config.kmoduli}')
+    except AttributeError:
+        pass
 
     # initialize model
     if (config.n_hyper > 1) or (len(config.ambient) > 1):
@@ -126,7 +132,7 @@ if __name__ == '__main__':
     for epoch in range(int(config.n_epochs)):
 
         if (config.periodic_eval is False) and (epoch % config.eval_interval == 0):
-            val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+            val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
             storage = callback(epoch, t0, 0, val_data, params, metric_fn, g_FS_fn, config, storage, logger, mode='VAL')
 
         if epoch > 0: 
@@ -141,7 +147,7 @@ if __name__ == '__main__':
             
             if config.periodic_eval is True:
                 if t % config.eval_interval_t == 0:
-                    val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
                     storage = callback(epoch, t0, 0, val_data, params, metric_fn, g_FS_fn, config, storage, logger, mode='VAL')
 
             wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)

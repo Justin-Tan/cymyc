@@ -59,7 +59,7 @@ class PointGenerator:
         self.n_fold = np.sum(ambient) -self.n_hyper
         self.n_devs = len(jax.devices('cpu'))
         self.n_coords = monomials[0].shape[1]
-        self.conf_mat, p_conf_mat = self._configuration_matrix(monomials, ambient) 
+        self.conf_mat, self.p_conf_mat = self._configuration_matrix(monomials, ambient) 
         self.t_degrees = self._find_degrees(ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
 
@@ -422,6 +422,11 @@ class PointGenerator:
 
         weights, pullbacks = np.squeeze(np.concatenate(weights, axis=0)), np.squeeze(np.concatenate(pullbacks, axis=0))
         dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
+        
+        p_conf = np.array(self.p_conf_mat)
+        chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, self.kmoduli)
+        print('Volume', vol)
+        print('Volume at chosen Kahler moduli', canonical_vol)
 
         kappa = vol_g / vol_Omega
         self._kappa = kappa
@@ -431,7 +436,11 @@ class PointGenerator:
             'dVol_Omegas':      dVol_Omegas,
             'kappa':            kappa,
             'vol_g':            vol_g,
-            'vol_Omega':        vol_Omega }
+            'vol_Omega':        vol_Omega, 
+            'chi':              chi,
+            'c2_w_J':           c2_w_J,
+            'vol':              vol,
+            'canonical_vol':    canonical_vol }
     
     def export(self, path, cicy_pts, n_p, v_p, psi, poly_data, coefficients):
         os.makedirs(path, exist_ok=True)
@@ -458,8 +467,11 @@ class PointGenerator:
             vol_g       = integration_params["vol_g"],
             vol_Omega   = integration_params["vol_Omega"],
             psi         = psi)
-        
-        metadata = utils.save_metadata(poly_data, coefficients, integration_params["kappa"], path)
+
+        topological_data = {k: integration_params[k] for k in integration_params.keys() if \
+                                k in ['chi', 'vol', 'c2_w_J', 'canonical_vol']}
+        metadata = utils.save_metadata(poly_data, coefficients, integration_params["kappa"], path,
+                                       topological_data=topological_data)
 
     @property
     def kappa(self):
@@ -489,12 +501,12 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.X33_spec  # tian_yau_KM_spec
-    coeff_fn = poly_spec.X33_coefficients  # tian_yau_KM_coefficients
+    # poly_specification = poly_spec.X33_spec  # tian_yau_KM_spec
+    # coeff_fn = poly_spec.X33_coefficients  # tian_yau_KM_coefficients
     #poly_specification = poly_spec.X24_spec
     #coeff_fn = poly_spec.X24_coefficients
-    #poly_specification = poly_spec.quarti_quadric_spec
-    #coeff_fn = poly_spec.quarti_quadric_coefficients
+    poly_specification = poly_spec.quarti_quadric_spec
+    coeff_fn = poly_spec.quarti_quadric_coefficients
     psi = args.psi
     if psi is None: psi = 0.0
     coefficients = coeff_fn(psi)
