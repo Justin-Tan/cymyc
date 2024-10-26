@@ -33,15 +33,91 @@ def tian_yau_spec():
     monomials = [monomials_1, monomials_2, monomials_3]
 
     cy_dim = 3
-    kmoduli = np.ones(2)
+    kmoduli = np.ones(2, dtype=np.complex64)
     ambient = np.array([3,3])
 
     return monomials, cy_dim, kmoduli, ambient
 
+def bicubic_spec():
+    monomials = np.asarray([
+        [3, 0, 0, 3, 0, 0],  # 4 * x0^3 * y0^3
+        [0, 3, 0, 3, 0, 0],  # 2 * x0^3 * y1^3
+        [0, 0, 3, 3, 0, 0],  # 1 * x0^3 * y2^3
+        [3, 0, 0, 0, 3, 0],  # 6 * x1^3 * y0^3
+        [0, 3, 0, 0, 3, 0],  # 5 * x1^3 * y1^3
+        [0, 0, 3, 0, 3, 0],  # 2 * x1^3 * y2^3
+        [3, 0, 0, 0, 0, 3],  # 9 * x2^3 * y0^3
+        [0, 3, 0, 0, 0, 3],  # 6 * x2^3 * y1^3
+        [0, 0, 3, 0, 0, 3],  # 4 * x2^3 * y2^3
+        [1, 1, 1, 1, 1, 1],  # -3 * ψ * x0 * x1 * x2 * y0 * y1 * y2
+    ], dtype=np.int64)
+    monomials = [monomials]
+
+    cy_dim = 3
+    kmoduli = np.ones(2, dtype=np.complex64)
+    # kmoduli = np.array([1,0], dtype=np.complex64)
+    ambient = np.array([2,2])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def bicubic_coefficients(psi):
+    coefficients = [np.asarray([4, 6, 9, 2, 5, 6, 1, 2, 4, -3 * psi])]
+    return coefficients
+
+def bicubic_redux_spec():
+    monomials = np.asarray([
+        [3, 0, 0, 3, 0, 0],  # 4 * x0^3 * y0^3
+        [0, 3, 0, 0, 3, 0],  # 2 * x0^3 * y1^3
+        [0, 0, 3, 0, 0, 3],  # 1 * x0^3 * y2^3
+        [3, 0, 0, 0, 3, 0],  # 6 * x1^3 * y0^3
+        [0, 3, 0, 0, 0, 3],  # 5 * x1^3 * y1^3
+        [0, 0, 3, 3, 0, 0],  # 2 * x1^3 * y2^3
+        [3, 0, 0, 0, 0, 3],  # 9 * x2^3 * y0^3
+        [0, 3, 0, 3, 0, 0],  # 6 * x2^3 * y1^3
+        [0, 0, 3, 0, 3, 0],  # 4 * x2^3 * y2^3
+    ], dtype=np.int64)
+    monomials = [monomials]
+
+    cy_dim = 3
+    kmoduli = np.ones(2, dtype=np.complex64)
+    # kmoduli = np.array([1,0], dtype=np.complex64)
+    ambient = np.array([2,2])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def bicubic_redux_coefficients(psi):
+    coefficients = [np.concatenate((np.ones(3), psi * np.ones(6)))]
+    return coefficients
+
+def quarti_quadric_spec():
+    monomials = np.asarray([
+        [4, 0, 0, 0, 2, 0],
+        [0, 4, 0, 0, 2, 0],
+        [0, 0, 4, 0, 2, 0],
+        [0, 0, 0, 4, 2, 0], 
+        [4, 0, 0, 0, 0, 2],
+        [0, 4, 0, 0, 0, 2], 
+        [0, 0, 4, 0, 0, 2],
+        [0, 0, 0, 4, 0, 2],
+        [1, 1, 1, 1, 1, 1],
+    ], dtype=np.int64)
+    monomials = [monomials]
+    
+    cy_dim = 3
+    # kmoduli = 12 * np.ones(2, dtype=np.complex64)
+    t0, t1 = 12, 6
+    kmoduli = np.array([t0,t1], dtype=np.complex64)
+    ambient = np.array([3,1])
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def quarti_quadric_coefficients(psi):
+    coefficients = [np.asarray([1, 1, 1, 1, 1, 2, -1, -2, -4 * psi])]
+    return coefficients
+
 def tian_yau_coefficients(psi):
     coefficients = [np.append(np.ones(4), -3. * psi), np.ones(4), np.ones(4)]
     return coefficients
-
 
 def tian_yau_KM_spec():
     # Based off deformations in Kalara-Mohapatra paper
@@ -91,7 +167,7 @@ def schimmrigk_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(2)
+    kmoduli = np.ones(2, dtype=np.complex64)
     ambient = np.array([3,2])
     return monomials, cy_dim, kmoduli, ambient
 
@@ -120,7 +196,7 @@ def X33_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([5])
     return monomials, cy_dim, kmoduli, ambient
 
@@ -145,7 +221,7 @@ def X24_spec():
     monomials = [monomials_1, monomials_2]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([5])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -174,7 +250,7 @@ def X223_spec():
     monomials = [monomials_1, monomials_2, monomials_3]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([6])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -207,7 +283,7 @@ def X2222_spec():
     monomials = [monomials_1, monomials_2, monomials_3, monomials_4]
 
     cy_dim = 3
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([7])
     return monomials, cy_dim, kmoduli, ambient  
 
@@ -228,7 +304,7 @@ def mirror_quintic_spec():
     ], dtype=np.int64)
 
     cy_dim, n_coords = 3, monomials.shape[-1]
-    kmoduli = np.ones(1)
+    kmoduli = np.ones(1, dtype=np.complex64)
     ambient = np.array([4])
     degrees = ambient + 1
 
@@ -279,6 +355,10 @@ def X24_deformation(p, precision=np.complex128):
     d2 = jnp.einsum("...a,aj->...j", jnp.expand_dims(p[0]*p[1]*p[2]*p[3], axis=-1),
                       jnp.asarray([[0.,-4.]], precision))
     return d1 + d2
+
+def quarti_quadric_deformation(p, precision=np.complex128):
+    d = jnp.expand_dims(jnp.prod(p, dtype=precision), axis=-1)
+    return d
 
 def tian_yau_yukawas():
     kappa_deformation_idx = [

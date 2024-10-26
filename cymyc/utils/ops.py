@@ -115,7 +115,7 @@ class EinsumComplex(nn.Einsum):
       bias_shape, broadcasted_bias_shape = self._get_bias_shape(
         einsum_str, inputs, kernel
       )
-      bias = self.param('bias', self.bias_init, bias_shape) # , self.param_dtype)
+      bias = self.param('bias', self.bias_init, bias_shape, self.param_dtype) # , self.param_dtype)
     else:
       bias = None
 

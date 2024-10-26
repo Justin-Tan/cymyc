@@ -98,7 +98,7 @@ if __name__ == '__main__':
     dataset_size = A_train[0].shape[0]
 
     # initialize model
-    if config.n_hyper > 1:
+    if (config.n_hyper > 1) or (len(config.ambient) > 1):
         model_class = models.LearnedVector_spectral_nn_CICY
         eta_model_class = models.CoeffNetwork_spectral_nn_CICY
         eta_model = eta_model_class(config.n_ambient_coords, config.ambient, config.n_units_harmonic,
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     monomials, cy_dim, kmoduli, ambient = config.poly_specification()
     coefficients = config.coeff_fn(psi)
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         monomials = [monomials]
         coefficients = [coefficients]
 
@@ -154,7 +154,7 @@ if __name__ == '__main__':
     for epoch in range(int(config.n_epochs)):
 
         if config.periodic_eval is False:
-            val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+            val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
             storage = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, val_data, params, config, storage, logger, mode='VAL')
         
         if epoch > 0: 
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
             if config.periodic_eval is True:
                 if t % config.eval_interval == 0:
-                    val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
                     _ = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, data, params, config, storage, logger, mode='TRAIN')
                     storage = callback(harmonic_wp.loss_breakdown, epoch, t0, 0, val_data, params, config, storage, logger, mode='VAL')
             wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)

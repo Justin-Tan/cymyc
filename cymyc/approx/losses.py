@@ -249,7 +249,8 @@ def objective_function_ricci(data: Tuple[ArrayLike, ArrayLike, ArrayLike],
 
     return jnp.mean(loss * weights)  # probably should norm this.
 
-def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None):
+def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None,
+        canonical_vol=None):
     p, weights, dVol_Omega = data
 
     # full closure for \del \bar{\del} operations
@@ -295,6 +296,7 @@ def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None):
         ricci_tensor.append(_ricci_tensor)
         n += B
 
+    chi_form = chi_form * canonical_vol / vol_CY
     g_inv = jnp.linalg.inv(g_pred)
     ricci_tensor = jnp.vstack(ricci_tensor)
     R = jnp.real(jnp.einsum('...ij, ...ji->...', g_inv, ricci_tensor))
@@ -314,7 +316,7 @@ def ma_proportionality(p, weights, config):
     Calculates proportionality constant between the rival volume forms $\Omega \wedge \bar{\Omega}$ and $\omega^n$. 
     """
 
-    if config.n_hyper == 1:
+    if (config.n_hyper == 1) and (len(config.ambient) == 1):
         get_metadata = partial(alg_geo.compute_integration_weights, config.dQdz_monomials, config.dQdz_coeffs, 
                 cy_dim=config.cy_dim)
         g_FS_fn = fubini_study.fubini_study_metric_homo_pb_precompute

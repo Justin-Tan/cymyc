@@ -196,7 +196,8 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
                 p_ambient_i = math_utils.to_real(p_ambient_i)
                 spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
 
-            x = jnp.stack(spectral_out, axis=-1).reshape(-1)
+            # x = jnp.stack(spectral_out, axis=-1).reshape(-1)
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
         
         for i, layer in enumerate(self.layers):
             x = layer(x)
@@ -244,9 +245,15 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
         self.n_asym, self.n_sym = self.param_counts[-1]
         self.n_eta_out = len(self.ambient) * self.n_asym * self.n_sym * 2
         self.layers = [nn.Dense(f) for f in self.n_units]
-        # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
-        self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.h_21, self.n_asym, self.n_sym), 
-                                             '...i, ...ihab->...hab', name='layers_coeffs')
+
+        self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
+        if self.common_ambient_space:
+            # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
+            self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.h_21, self.n_asym, self.n_sym), 
+                                                 '...i, ...ihab->...hab', name='layers_coeffs')
+        else:
+            self.coeff_layers = [ops.EinsumComplex((self.n_units[-1], self.h_21, pc[0], pc[1]), '...i, ...ihab->...hab',
+                                                   name=f'layers_coeffs_{i}') for i, pc in enumerate(self.param_counts)]
 
     @nn.compact
     def __call__(self, x: Float[Array, "i"]) -> Array:
@@ -272,17 +279,23 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
             p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
             spectral_out.append(self.spectral_layer(math_utils.to_real(p_ambient_i), self.dims[i]))
 
-        x = jnp.stack(spectral_out, axis=-1).reshape(-1)     
+        #  x = jnp.stack(spectral_out, axis=-1).reshape(-1)     
+        x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
 
         for i, layer in enumerate(self.layers):
             x = layer(x)
             if i != self.n_hidden - 1:
                 x = self.activation(x)
 
-        coeffs = self.coeff_layer(x)  # [..., n_A * h_{21}, n_asym, n_sym]
+        if self.common_ambient_space:
+            coeffs = self.coeff_layer(x)  # [..., n_A * h_{21}, n_asym, n_sym]
+            print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
+            return jnp.split(coeffs, len(self.ambient), axis=0)
+        else:
+            coeffs = [coeff_layer(x) for coeff_layer in self.coeff_layers]
+            print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
+            return coeffs
 
-        print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
-        return jnp.split(coeffs, len(self.ambient), axis=0)
 
 
 @partial(jit, static_argnums=(2,3,4,5,6))
@@ -318,7 +331,7 @@ def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
     print(f'Compiling {phi_head.__qualname__}')
     n_units = [params[k]['kernel'].shape[-1] for k in params.keys()][:-1]
 
-    if n_hyper > 1:
+    if (n_hyper > 1) or (len(ambient) > 1):
         return LearnedVector_spectral_nn_CICY(p.shape[-1]//2, ambient, n_units, n_out, 
                 use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
 
@@ -396,7 +409,7 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
-    if config.n_hyper > 1:
+    if (config.n_hyper > 1) or (len(config.ambient) > 1):
         g_FS_fn = partial(fubini_study._fubini_study_metric_homo_gen_pb_cicy, 
                     dQdz_monomials=config.dQdz_monomials, 
                     dQdz_coeffs=config.dQdz_coeffs, 
@@ -404,7 +417,7 @@ def helper_fns(config):
                     cy_dim=config.cy_dim, 
                     n_coords=config.n_coords,
                     ambient=tuple(config.ambient), 
-                    k_moduli=None,
+                    k_moduli=config.kmoduli,
                     ambient_out=True,
                     cdtype=config.cdtype)
         pb_fn = partial(alg_geo._pullbacks_cicy,

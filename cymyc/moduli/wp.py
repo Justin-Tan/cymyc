@@ -53,7 +53,7 @@ class WP:
 
         self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
 
-        if self.n_hyper > 1:
+        if (self.n_hyper > 1) or (len(self.ambient) > 1):
             self.integration_weights_fn = partial(alg_geo._integration_weights_cicy,
                 n_hyper=self.n_hyper, cy_dim=self.dim, n_coords=self.n_homo_coords,
                 ambient=self.ambient, kmoduli_ambient=self.kmoduli_ambient, cdtype=self.cdtype)
@@ -208,7 +208,7 @@ class WP:
         weights, pb, *_ = vmap(self.integration_weights_fn, in_axes=(0,None,None))(
             p, dQdz_monomials, dQdz_coeffs)
 
-        if self.n_hyper == 1:
+        if (self.n_hyper == 1) and (len(self.ambient) == 1):
             dQdz_monomials, dQdz_coeffs = [dQdz_monomials], [dQdz_coeffs]
             
         vol_Omega = jnp.mean(weights)
@@ -302,8 +302,8 @@ class WP:
         
         ones_mask = jnp.logical_not(jnp.isclose(p, jax.lax.complex(1.,0.)))
         dQdz_homo = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p, dQdz_monomials, dQdz_coeffs)
-        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None))(
-            p, dQdz_homo, self.n_hyper, self.n_homo_coords)
+        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None,None))(
+            p, dQdz_homo, self.n_hyper, self.n_homo_coords, self.ambient)
 
         # get KS representative along diffeomorphisms r,s
         _, dzeta_a_dzbar = vmap(self.zeta_jacobian, in_axes=(0,None,None,None))(
@@ -743,8 +743,8 @@ class WP_full(WP):
         
         ones_mask = jnp.logical_not(jnp.isclose(p, jax.lax.complex(1.,0.)))
         dQdz_homo = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p, dQdz_monomials, dQdz_coeffs)
-        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None))(
-            p, dQdz_homo, self.n_hyper, self.n_homo_coords)
+        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None,None))(
+            p, dQdz_homo, self.n_hyper, self.n_homo_coords, self.ambient)
 
         # get Lie derivative of Ω along diffeomorphisms r,s
         _, dzeta_a_dzbar = vmap(self.zeta_jacobian, in_axes=(0,None,None,None))(
@@ -880,8 +880,8 @@ class WP_full(WP):
 
         ones_mask = jnp.logical_not(jnp.isclose(p, jax.lax.complex(1.,0.)))
         dQdz_homo = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p, dQdz_monomials, dQdz_coeffs)
-        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None))(
-            p, dQdz_homo, self.n_hyper, self.n_homo_coords)
+        Omega = vmap(alg_geo._holomorphic_volume_form, in_axes=(0,0,None,None,None))(
+            p, dQdz_homo, self.n_hyper, self.n_homo_coords, self.ambient)
 
         # get Lie derivative of Ω along all diffeomorphism directions [..., h_{21}, n_inhomo_coords, n_homo_coords]
         dzeta_dz, dzeta_dzbar = vmap(self.zeta_jacobian_complete, in_axes=(0,None,None))(p, dQdz_monomials, dQdz_coeffs)

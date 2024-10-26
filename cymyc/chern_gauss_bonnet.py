@@ -261,7 +261,7 @@ def euler_characteristic_form(data: Tuple[Float[Array, "2 * i"], Float[Array, ""
     riem = curvature.riemann_tensor_kahler(p, metric_fn, pullbacks)
     c_n = chern3(riem)
 
-    prefactor = math.factorial(cy_dim)
+    prefactor = 1./math.factorial(cy_dim)
     norm_factor = (-2*1.j)**cy_dim * prefactor  # convert from C^3 to R^6 - convention, since dVol_{CY} = w^n/n!
     chi = norm_factor * weights/dVol_Omega * c_n
     return chi
