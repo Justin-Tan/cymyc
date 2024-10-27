@@ -22,7 +22,7 @@ Somewhat loosely, when using `Jax`, one is usually not writing code to be execut
 A full discussion of the `Jax` model is beyond the scope here, and we defer to the excellent [official guides](https://jax.readthedocs.io/en/latest/key-concepts.html) on this matter. However, as a quick summary:
 
 1. The `Jax` computational model is to express algorithms in terms of operations on immutable data structures using pure functions.
-2. Written in this day, useful program transformations (differentiation, compilation, vectorisation, etc.) may be automatically applied by the framework without further intervention.
+2. Written in this way, useful program transformations (differentiation, compilation, vectorisation, etc.) may be automatically applied by the framework without further intervention.
 
 Most of these complications are not exposed to end users, but being aware of this is important if attempting to build on top of this library.
 

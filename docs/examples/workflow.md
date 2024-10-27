@@ -13,6 +13,9 @@ Here we take as example the mirror to the manifold $\mathbb{P}^5[2,4]$. This is 
 
  This manifold has a single complex structure modulus - see [this article](https://arxiv.org/abs/1903.00596) for more details. We choose the point $\psi = 1/2$ in complex structure moduli space. The following script samples 320000 points from the above zero locus, together with 64000 validation points, saving it to the directory `data/X24`. 
 
+ !!! info
+    Point sampling occurs with respect to a given choice of the complex structure moduli, currently one may consider the complex structure of the approximate metric fixed by this stage. 
+
 ```python
 python3 -m cymyc.utils.pointgen_cicy -o data/X24 -n_p 320000 -val 0.2 -psi 0.5
 ```
@@ -27,8 +30,9 @@ python3 -m cymyc.approx.train -name X24_metric -ds data/X24
 ```
 This will output the parameters of the neural network approximating the Ricci-flat metric to the directory `experiments/X24_psi/`. One may now compute geometric quantities using this approximate metric using the routines in `src/curvature`, or compute exponential maps / geodesics etc. using the [`diffrax`](https://docs.kidger.site/diffrax/) library. 
 
+
 ## Harmonic form approximation
-To approximate harmonic differential forms on $\mathbb{P}^5[2,4]$, run the following script, supplying the path to the model checkpoint of the approximate metric saved at the end of the optimisation process.
+To approximate harmonic differential forms and thereby Yukawa couplings on $\mathbb{P}^5[2,4]$, run the following script, supplying the path to the model checkpoint of the approximate metric saved at the end of the optimisation process.
 
 ```python
 python3 -m cymyc.approx.eta_train -name X24_harmonic -ds data/X24 -ckpt /path/to/metric/checkpoint

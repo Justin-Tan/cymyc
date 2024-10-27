@@ -28,7 +28,7 @@ Requires Python >=3.10 - all needed dependencies will be automatically installed
 
 ## Documentation / examples
 
-Check out the docs at [justin-tan.github.io/cymyc/](https://justin-tan.github.io/cymyc/). If you are new to Jax and want to get your hands dirty, then start with [this example](https://justin-tan.github.io/cymyc/examples/curvature/).
+Check out the docs at [justin-tan.github.io/cymyc/](https://justin-tan.github.io/cymyc/). If you are new to Jax and want to get your hands dirty, then start with [this example](https://justin-tan.github.io/cymyc/examples/curvature/). Also see the [example workflow](https://justin-tan.github.io/cymyc/examples/workflow/) for canonical usage of the scripts in this library.
 
 
 ### Contributing / Development
