@@ -501,12 +501,8 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    # poly_specification = poly_spec.X33_spec  # tian_yau_KM_spec
-    # coeff_fn = poly_spec.X33_coefficients  # tian_yau_KM_coefficients
-    #poly_specification = poly_spec.X24_spec
-    #coeff_fn = poly_spec.X24_coefficients
-    poly_specification = poly_spec.quarti_quadric_spec
-    coeff_fn = poly_spec.quarti_quadric_coefficients
+    poly_specification = poly_spec.X24_spec
+    coeff_fn = poly_spec.X24_coefficients
     psi = args.psi
     if psi is None: psi = 0.0
     coefficients = coeff_fn(psi)
@@ -518,7 +514,7 @@ if __name__ == "__main__":
     
     # generate points and integration data
     cicy_pts = pg_cicy.sample_intersect_cicy(key, n_p + v_p)
-    integration_params = pg_cicy.compute_integration_parameters(cicy_pts, n_p, v_p)
+    # integration_params = pg_cicy.compute_integration_parameters(cicy_pts, n_p, v_p)
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)
