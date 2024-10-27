@@ -246,7 +246,11 @@ def save_metadata(poly_data, coefficients, kappa, dpath, data_out='dataset.npz',
         ts = np.array(sp.symbols(ts))
 
         # config.canonical_vol = topological_data['canonical_vol']
-        config.canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
+        if len(config.kmoduli) == 1:
+            canonical_vol = float(vol.subs(ts, config.kmoduli[0]))
+        else:
+            canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
+        config.canonical_vol = canonical_vol
 
     _dictify = lambda x: dict((n, getattr(x, n)) for n in dir(x) if not (n.startswith('__') or 'logger' in n))
     config_d = _dictify(config)
@@ -280,7 +284,11 @@ def read_metadata(config, kmoduli=None, save=True):
         vol = sp.sympify(config.vol)
         ts = " ".join([f"t_{i}" for i in range(len(config.kmoduli))])
         ts = np.array(sp.symbols(ts))
-        config.canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
+        if len(config.kmoduli) == 1:
+            canonical_vol = float(vol.subs(ts, config.kmoduli[0]))
+        else:
+            canonical_vol = float(vol.subs(list(zip(ts, config.kmoduli))))
+        config.canonical_vol = canonical_vol
 
     if save is True: save_config(config)
     return config   
