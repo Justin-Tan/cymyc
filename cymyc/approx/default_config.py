@@ -37,10 +37,11 @@ class config(object):
 
     n_units_harmonic = [64, 64, 128, 64, 42]
 
-    # These need to correspond to the manifold you wish to examine 
-    poly_specification = poly_spec.X24_spec
-    coeff_fn = poly_spec.X24_coefficients
-    deformation_fn = partial(poly_spec.X24_deformation, precision=cdtype)
+    # These need to correspond to the manifold you wish to examine,
+    # see `examples/poly_spec` for conventions
+    poly_specification = poly_spec.X33_spec
+    coeff_fn = poly_spec.X33_coefficients
+    deformation_fn = partial(poly_spec.X33_deformation, precision=cdtype)
 
     name = 'default'
     dataset = 'default'
