@@ -190,7 +190,10 @@ def _fubini_study_metric_homo_gen_pb_cicy(p: Float[Array, "i"], dQdz_monomials: 
     p = math_utils.to_complex(p)
     g_FS = jnp.zeros((n_coords, n_coords), dtype=cdtype)
 
-    if k_moduli is None: k_moduli = jnp.ones_like(np.array(ambient), dtype=cdtype)
+    if k_moduli is None:
+        k_moduli = jnp.ones_like(np.array(ambient), dtype=cdtype)
+    else:
+        k_moduli = k_moduli.astype(cdtype)
 
     for i in range(len(ambient)):
         s, e = np.sum(ambient[:i]).astype(np.int32) + i, np.sum(ambient[:i+1]) + i + 1
