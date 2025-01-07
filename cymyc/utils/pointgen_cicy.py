@@ -501,8 +501,8 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.tian_yau_KM_spec
-    coeff_fn = poly_spec.tian_yau_KM_coefficients
+    poly_specification = poly_spec.X33_spec
+    coeff_fn = poly_spec.X33_coefficients
     psi = args.psi
     if psi is None: psi = 1.618
     coefficients = coeff_fn(psi)

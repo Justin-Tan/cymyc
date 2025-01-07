@@ -20,11 +20,13 @@ First, clone the project:
 
 ```shell
 git clone git@github.com:Justin-Tan/cymyc.git
+cd cymyc
 ```
 
 Next, with a working Python installation, create a new virtual environment and run an editable install, which permits local development.
 
 ```shell
+pip install --upgrade pip
 python -m venv /path/to/venv
 source /path/to/venv/bin/activate
 
@@ -36,7 +38,7 @@ Requires Python >=3.10 - all needed dependencies will be automatically installed
     This library is device-agnostic. That being said, autodiff routines will usually be significantly faster if the user has access to a GPU. If this applies to you, follow the Jax [GPU installation instructions](https://github.com/google/jax?tab=readme-ov-file#installation) to enable GPU support.
 
 ### Contributing / Development
-This library is under active development. Please open an issue / pull request if you encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project or help us guide development.
+This library is under active development, and the current state is but the leading order approximation. Please open an issue / pull request if you encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project or help us guide development.
 
 ## Citation
 --8<-- ".citation.md"
