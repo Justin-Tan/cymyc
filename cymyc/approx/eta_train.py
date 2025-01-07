@@ -97,12 +97,20 @@ if __name__ == '__main__':
             config.batch_size, logger=logger)
     dataset_size = A_train[0].shape[0]
 
+    # Set multiple deformations here, e.g. for Tian-Yau,
+    from examples.tian_yau import TY_KM_poly_spec
+    # defo_idx = [4, 9, 11, 12, 13, 17, 18, 21, 22]
+    defo_idx = [9,18]
+    deformations = TY_KM_poly_spec.TY_KM_deformations_expanded()
+    config.deformations = [deformations[idx] for idx in defo_idx]
+    # config.deformations = [config.deformation_fn]
+
     # initialize model
     if (config.n_hyper > 1) or (len(config.ambient) > 1):
         model_class = models.LearnedVector_spectral_nn_CICY
         eta_model_class = models.CoeffNetwork_spectral_nn_CICY
         eta_model = eta_model_class(config.n_ambient_coords, config.ambient, config.n_units_harmonic,
-               activation=nn.gelu)
+               activation=nn.gelu, h_21=len(config.deformations))
     else:
         model_class = models.LearnedVector_spectral_nn
 
@@ -141,12 +149,6 @@ if __name__ == '__main__':
     g_FS_fn, g_correction_fn, pb_fn = models.helper_fns(config)
     metric_fn = jax.tree_util.Partial(models.ddbar_phi_model, params=g_params, g_ref_fn=g_FS_fn, g_correction_fn=g_correction_fn)
 
-    # Set multiple deformations here, e.g. for Tian-Yau,
-    # from examples.tian_yau import TY_KM_poly_spec
-    # defo_idx = [4, 9, 11, 12, 13, 17, 18, 21, 22]
-    # deformations = TY_KM_poly_spec.TY_KM_deformations_expanded()
-    # config.deformations = [deformations[idx] for idx in defo_idx]
-    config.deformations = [config.deformation_fn]
 
     harmonic_wp = harmonic.HarmonicFull(config.cy_dim, monomials, config.ambient, config.deformations, dQdz_monomials,
                                     dQdz_coeffs, metric_fn, pb_fn, config.coeff_fn, psi)
