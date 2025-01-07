@@ -14,11 +14,13 @@ First, clone the project:
 
 ```shell
 git clone git@github.com:Justin-Tan/cymyc.git
+cd cymyc
 ```
 
 Next, with a working Python installation, create a new virtual environment and run an editable install, which permits local development.
 
 ```shell
+pip install --upgrade pip
 python -m venv /path/to/venv
 source /path/to/venv/bin/activate
 
@@ -32,16 +34,21 @@ Check out the docs at [justin-tan.github.io/cymyc/](https://justin-tan.github.io
 
 
 ### Contributing / Development
-This library is under active development. Please open an issue / pull request if you encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project and help us guide development.
+This library is under active development, and the current state is but the leading order approximation. Please open an issue / pull request if you encounter unexpected behaviour. Additionally, feel free to get in touch anytime to discuss the project and help us guide development.
 
 ## Citation
-If you found this library to be useful in academic work, then please cite: ([arXiv](https://arxiv.org/abs/2408.xxxx))
+If you found this library to be useful in academic work, then please cite: ([arxiv](https://arxiv.org/abs/2410.19728)).
 
 ```bibtex
-@software{cymyc,
+@article{cymyc,
 	author = {Butbaia, Giorgi, Tan, Justin, ...},
 	title = {\textsf{cymyc}: {\it A \textsf{{JAX}} package for {C}alabi--{Y}au 
-	{M}etrics {Y}ukawas and {C}urvature (to appear)}}
+	{M}etrics {Y}ukawas and {C}urvature}},
+    eprint = "2410.19728",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    month = "10",
+    year = "2024"
 }
 ```
 
