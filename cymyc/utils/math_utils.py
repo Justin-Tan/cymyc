@@ -291,7 +291,7 @@ def Pi(conf, kmoduli):
 
     _t = functools.reduce(sympy.diff, zip(Js, Pns), chi_terms)
     chi = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor
-    assert type(chi) is sympy.core.numbers.Integer, 'Euler characteristic is not an integer!'
+    if chi != 0: assert type(chi) is sympy.core.numbers.Integer, 'Euler characteristic is not an integer!'
     
     _t = functools.reduce(sympy.diff, zip(Js, Pns), c2_w_J_terms)
     c2_w_J = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor

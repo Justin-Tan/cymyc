@@ -175,6 +175,11 @@ if __name__ == "__main__":
 
     kappa = (vol_g / vol_Omega)
 
+    conf, p_conf = math_utils._configuration_matrix((monomials,), ambient)
+    p_conf = np.array(p_conf)
+    chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, kmoduli)
+    topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
+
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)
     f = os.path.join(args.output_path, 'dataset.npz')
@@ -197,7 +202,8 @@ if __name__ == "__main__":
                             kappa=kappa, vol_g=vol_g, vol_Omega=vol_Omega,
                             psi=psi)
         
-    metadata = utils.save_metadata(poly_specification(), coefficients, kappa, args.output_path)
+    metadata = utils.save_metadata(poly_specification(), coefficients, kappa, args.output_path,
+                                   topological_data=topological_data)
     delta_t = time.time() - start
     print(f'Time elapsed: {delta_t:.3f} s')
 

@@ -41,7 +41,8 @@ from jaxtyping import Array, Float, Complex, ArrayLike
 # custom
 from .utils import math_utils
 
-def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *args) -> Complex[Array, "... i"]:
+def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], wide: bool = False,
+           *args) -> Complex[Array, "... i"]:
     r"""Holomorphic derivative of a function.
 
     Parameters
@@ -75,14 +76,19 @@ def del_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *ar
     """
     
     dim = p.shape[-1]//2  # complex dimension
-    real_Jac_fun_p = jacfwd(fun)(p, *args)
+    if wide is True:
+        grad_fun = grad
+    else:
+        grad_fun = jacfwd
+    real_Jac_fun_p = grad_fun(fun)(p, *args)
     dfun_dx = real_Jac_fun_p[..., 0:dim]
     dfun_dy = real_Jac_fun_p[..., dim:]
     dfun_dz = 0.5 * (dfun_dx - 1.j * dfun_dy)
     
     return jnp.squeeze(dfun_dz)
 
-def del_bar_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], *args) -> Complex[Array, "... i"]:
+def del_bar_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array], wide: bool = False,
+             *args) -> Complex[Array, "... i"]:
     r"""Anti-holomorphic derivative of a function.
 
     Parameters
@@ -100,7 +106,11 @@ def del_bar_z(p: Float[Array, "i"], fun: Callable[[Float[Array, "..."]], Array],
     """
     
     dim = p.shape[-1]//2  # complex dimension
-    real_Jac_fun_p = jacfwd(fun)(p, *args)
+    if wide is True:
+        grad_fun = grad
+    else:
+        grad_fun = jacfwd
+    real_Jac_fun_p = grad_fun(fun)(p, *args)
     dfun_dx = real_Jac_fun_p[..., 0:dim]
     dfun_dy = real_Jac_fun_p[..., dim:]
     dfun_dz_bar = 0.5 * (dfun_dx + 1.j * dfun_dy)

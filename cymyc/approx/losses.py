@@ -59,7 +59,8 @@ def monge_ampere_loss(g_pred: Complex[Array, "cy_dim cy_dim"], dVol_Omega: Float
 
 def ricci_tensor_loss(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
                       pullbacks: Complex[Array, "cy_dim i"] = None, ricci_scalar_out: bool = False, 
-                      norm_order: float = None) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+                      norm_order: float = None) -> Union[jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray, 
+                                                                            jnp.ndarray]]:
     r"""Computes the norm of the Ricci tensor, in local coordinates. Here we use the fact that
     the Ricci curvature on a Kähler manifold is computable as,
     $$
@@ -97,10 +98,11 @@ def ricci_tensor_loss(p: Float[Array, "i"], metric_fn: Callable[[Array], Array],
     ricci_tensor = 1.j * ricci_form
 
     if ricci_scalar_out is True:
-        g_herm = metric_fn(p)
-        g_inv = jnp.linalg.inv(g_herm)
+        g_pred = metric_fn(p)
+        g_inv = jnp.linalg.inv(g_pred)
         R = jnp.einsum('...ij, ...ji->...', g_inv, ricci_tensor)
-        return jnp.linalg.norm(ricci_tensor, ord=norm_order)/np.prod(ricci_tensor.shape), R
+        return ricci_tensor, R, g_pred
+        # return jnp.linalg.norm(ricci_tensor, ord=norm_order)/np.prod(ricci_tensor.shape), R
 
     return jnp.linalg.norm(ricci_tensor, ord=norm_order)/np.prod(ricci_tensor.shape)
 
@@ -337,3 +339,93 @@ def ma_proportionality(p, weights, config):
     print(f'kappa: {kappa:.7f}')
 
     return kappa
+
+partial(jit, static_argnums=(2,3,4))
+def objective_function_perelman(data: Tuple[ArrayLike, ArrayLike, ArrayLike], 
+                                joint_params: Mapping[str, Array],
+                                metric_fn: Callable[[ArrayLike], jnp.ndarray], 
+                                global_fn: Callable[[ArrayLike], jnp.ndarray], 
+                                pb_fn: Callable[[ArrayLike], jnp.ndarray]) -> jnp.ndarray:
+    p, weights, _ = data
+    metric_fn = jax.tree_util.Partial(metric_fn, params=joint_params['g_model'])
+    f_pred = vmap(global_fn, in_axes=(0,None))(p, joint_params['f_model'])
+
+    pb = vmap(pb_fn)(math_utils.to_complex(p))
+    ricci_tensor, R, g_pred = vmap(ricci_tensor_loss, in_axes=(0,None,0,None))(
+        p, metric_fn, pb, True)
+    g_inv = jnp.linalg.inv(g_pred)
+    grad_f = vmap(curvature.del_z, in_axes=(0,None,None,None))(p, global_fn, True, joint_params['f_model'])
+    grad_f = jnp.einsum('...ai,...i->...a', pb, grad_f)
+    grad_f_sq = jnp.einsum('...ij,...i,...j->...', g_inv, jnp.conjugate(grad_f), grad_f)
+    integrand = (R + grad_f_sq) * jnp.exp(-f_pred)
+    log_integrand = jnp.log(R + grad_f_sq) - f_pred
+    return jnp.mean(integrand * weights)
+
+def loss_breakdown_perelman(data, joint_params, metric_fn, global_fn, g_FS_fn, pb_fn, kappa=None,
+        canonical_vol=None):
+    p, weights, dVol_Omega = data
+    g_params, f_params = joint_params['g_params'], joint_params['f_params']
+
+    # full closure for \del \bar{\del} operations
+    metric_fn = jax.tree_util.Partial(metric_fn, params=g_params)
+
+    g_FS_ambient, pullbacks = vmap(g_FS_fn)(p)
+    g_FS_pb = jnp.einsum('...ia,...ab,...jb->...ij', pullbacks, g_FS_ambient, jnp.conjugate(pullbacks))
+
+    g_pred = vmap(metric_fn)(p)
+    cy_dim = g_pred.shape[-1]
+    det_g_pred = jnp.real(jnp.linalg.det(g_pred))
+
+    if kappa is None:
+        kappa = jax.lax.stop_gradient(kappa_estimate(det_g_pred, weights, dVol_Omega))
+
+    ma_loss = vmap(monge_ampere_loss, in_axes=(0,0,None))(g_pred, dVol_Omega, kappa)
+
+    k_loss = vmap(kahler_loss, in_axes=(0,0,None))(p, pullbacks, metric_fn)
+    v_loss = volume_loss(data, g_FS_pb, g_pred)
+    vol_CY = jnp.mean(weights / dVol_Omega * det_g_pred) # prefactor is choice of convention
+    vol_Omega = jnp.mean(weights)
+    _sigma_measure = measures.sigma_measure(data, metric_fn)
+
+    # Chunk Hessian computations - large batch sizes OOM on GPU
+    n_chunks = 4
+    data_chunked = jax.tree_util.tree_map(partial(lambda n, x: jnp.array_split(x, n), n_chunks), (*data, pullbacks))
+    _p, _w, _dVol_Omega, _pb = data_chunked
+    ricci_tensor, n = [], 0
+    chi_form, S_chi_form = 0., 0.
+    F_functional, S_F_functional = 0., 0.
+
+    for i in range(n_chunks):
+        B = _p[i].shape[0]
+        _data = (_p[i], _w[i], _dVol_Omega[i])
+        _ricci_tensor = -1.j * vmap(curvature.ricci_form_kahler, in_axes=(0,None,0))(_p[i], metric_fn, _pb[i])
+        _ricci_measure = measures.ricci_measure(_data, _pb[i], metric_fn, cy_dim)
+
+        # no Pfaffian
+        _chi_form_integrand = vmap(chern_gauss_bonnet.euler_characteristic_form, in_axes=(0,0,None))(_data, _pb[i], metric_fn)
+        _chi_form = jnp.mean(_chi_form_integrand)
+        S_chi_form_i = jnp.mean(jnp.square(_chi_form_integrand - _chi_form), axis=0)
+
+        _F_functional = objective_function_perelman(_data, joint_params, metric_fn, global_fn, pb_fn)
+
+        chi_form, S_chi_form = math_utils.online_update_array(chi_form, _chi_form, n, B, S_chi_form, S_chi_form_i)
+        F_functional = math_utils.online_update_array(F_functional, _F_functional, n, B)
+
+        ricci_tensor.append(_ricci_tensor)
+        n += B
+
+    chi_form = chi_form * canonical_vol / vol_CY
+    g_inv = jnp.linalg.inv(g_pred)
+    ricci_tensor = jnp.vstack(ricci_tensor)
+    R = jnp.real(jnp.einsum('...ij, ...ji->...', g_inv, ricci_tensor))
+    ricci_tensor_norm = jnp.mean(vmap(jnp.linalg.norm)(ricci_tensor)) / np.prod(ricci_tensor.shape[1:])
+    einstein_tensor_norm = jnp.linalg.norm(jnp.abs(ricci_tensor - 0.5 * g_pred * jnp.expand_dims(R, axis=(-1,-2)))) \
+        / np.prod(ricci_tensor.shape[1:])
+
+    return {'einstein_norm': jnp.mean(einstein_tensor_norm * weights), 
+            'F_functional': F_functional,
+            'monge_ampere_loss': jnp.mean(ma_loss * weights),
+            'ricci_tensor_norm': ricci_tensor_norm, 'chi_form': chi_form,
+            'kahler_loss': k_loss.mean(), 'ricci_scalar': R.mean(), 'det_g': det_g_pred.mean(),
+            'vol_loss': v_loss.mean(), 'vol_CY': vol_CY, 'vol_Omega': vol_Omega,
+            'sigma_measure': _sigma_measure, 'ricci_measure': _ricci_measure}
