@@ -15,6 +15,8 @@ def to_complex(x):
     where `x` = [Re(z) | Im(z)] <- divided into halves 
     """
     # assert x.shape[-1] % 2 == 0
+    if jnp.issubdtype(x.dtype, jnp.complexfloating):
+        return x
     c_dim = x.shape[-1] // 2
     return jax.lax.complex(x[...,0:c_dim], x[...,c_dim:])
 
