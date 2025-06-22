@@ -288,6 +288,27 @@ def mirror_quintic_coefficients(psi):
     coefficients = np.append(np.ones(5), -5. * psi)
     return coefficients
 
+def fermat_quartic_spec():
+    monomials = np.asarray([
+        [4, 0, 0, 0], # z0^4
+        [0, 4, 0, 0], # z1^4
+        [0, 0, 4, 0], # z2^4
+        [0, 0, 0, 4], # z3^4
+
+        [1, 1, 1, 1],
+    ], dtype=np.int64)
+
+    cy_dim, n_coords = 2, monomials.shape[-1]
+    kmoduli = np.ones(1, dtype=np.complex64)
+    ambient = np.array([3])
+    degrees = ambient + 1
+
+    return monomials, cy_dim, kmoduli, ambient
+
+def fermat_quartic_coefficients(psi):
+    coefficients = np.append(np.ones(4), -4. * psi)
+    return coefficients
+
 def mirror_quintic_deformation(p, precision=np.complex128):
     mirror_quintic_deform_monomial = jnp.asarray([1, 1, 1, 1, 1], dtype=np.int32)
     deformation_monomial = jnp.prod(jnp.power(p, mirror_quintic_deform_monomial), axis=-1)

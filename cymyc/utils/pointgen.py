@@ -140,8 +140,10 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.mirror_quintic_spec
-    coeff_fn = poly_spec.mirror_quintic_coefficients
+    # poly_specification = poly_spec.mirror_quintic_spec
+    # coeff_fn = poly_spec.mirror_quintic_coefficients
+    poly_specification = poly_spec.fermat_quartic_spec
+    coeff_fn = poly_spec.fermat_quartic_coefficients
     psi = args.psi
     coefficients = coeff_fn(args.psi)
     # ========================
@@ -177,8 +179,11 @@ if __name__ == "__main__":
 
     conf, p_conf = math_utils._configuration_matrix((monomials,), ambient)
     p_conf = np.array(p_conf)
-    chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, kmoduli)
+    chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, kmoduli, cy_dim)
     topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
+    print('Wall data', topological_data)
+    print('Volume', vol)
+    print('Volume at chosen Kahler moduli', canonical_vol)
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)
