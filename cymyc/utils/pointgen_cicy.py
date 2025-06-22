@@ -96,34 +96,13 @@ class PointGenerator:
         pn_pts = np.array(pn_pts, dtype=np.complex128)
         params = np.array(params, dtype=np.float64)
         
-        typed_tm_list, typed_tc_list = nb.typed.List(), nb.typed.List()
-        typed_pdtm_list, typed_pdtc_list = nb.typed.List(), nb.typed.List()
-
-        for m,c in zip(self.t_monomials, self.t_coeffs):
-            typed_tm_list.append(m)
-            typed_tc_list.append(c)
-        for m,c in zip(self.pdt_monomials, self.pdt_coeffs):
-            typed_pdtm_list.append(m)
-            typed_pdtc_list.append(c)
-        
-        root_func = partial(nb_t_poly_optimise, t_monomials=self.t_monomials, t_coeffs=self.t_coeffs, 
+        root_func = partial(self.nb_t_poly_optimise, t_monomials=self.t_monomials, t_coeffs=self.t_coeffs, 
                         root=True, dtype=np.complex128)
-        jacobian_func = partial(nb_t_poly_jacobian, pdt_monomials=self.pdt_monomials, pdt_coeffs=self.pdt_coeffs, 
+        jacobian_func = partial(self.nb_t_poly_jacobian, pdt_monomials=self.pdt_monomials, pdt_coeffs=self.pdt_coeffs, 
                         n_hyper=self.n_hyper, dtype=np.complex128)
 
-        # root_func = lambda params, p: nb_t_poly_optimise(params, p, 
-        #                                                     t_monomials=typed_tm_list,
-        #                                                     t_coeffs=typed_tc_list,
-        #                                                     root=True, 
-        #                                                     dtype=np.complex128)
-        # jacobian_func = lambda params, p: nb_t_poly_jacobian(params, p, 
-        #                                                         pdt_monomials=typed_pdtm_list, 
-        #                                                         pdt_coeffs=typed_pdtc_list, 
-        #                                                         n_hyper=self.n_hyper, 
-        #                                                         dtype=np.complex128)
-        # root_func = nb.njit(root_func)
-        # jacobian_func = nb.njit(jacobian_func)
-        with Parallel(backend='loky', batch_size=B, verbose=5, n_jobs=-1) as parallel:
+        with Parallel(backend='multiprocessing', batch_size=B, verbose=5, n_jobs=-1) as parallel:
+            # deprecated in favour of numba
             # z = parallel(delayed(self.poly_root)(par, p) for (par, p) in zip(params, pn_pts))  
             z = parallel(delayed(self.nb_poly_root)(par, p, root_func, jacobian_func) for (par, p) in zip(params, pn_pts))  
        
@@ -217,6 +196,56 @@ class PointGenerator:
         dT = dT.at[:c_dim, c_dim:].set(dudy)
         dT = dT.at[c_dim:, :c_dim].set(-dudy)
         dT = dT.at[c_dim:, c_dim:].set(dudx)
+        return dT
+
+    @staticmethod
+    @nb.njit
+    def nb_t_poly_optimise(params, p, t_monomials, t_coeffs, root=True, dtype=np.complex128):
+        """
+        Numerically optimize for the roots of these polynomial(s) over the parameters
+        of the hyperplane(s) to find the zero locus of the defining polynomial(s).
+        Note this function is holomorphic.
+        """
+        params = nb_to_complex(params)
+        p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
+        n_polys = len(t_monomials)
+        error = np.empty(n_polys, dtype=dtype)
+        for i in range(n_polys):
+            error[i] = nb_evaluate_poly(p_and_params, t_monomials[i], t_coeffs[i])
+        if root is True: return nb_to_real(error)
+
+        sum_abs_error = np.sum(np.abs(error))
+        return np.array([sum_abs_error], dtype=np.float64)
+
+    @staticmethod
+    @nb.njit
+    def nb_t_poly_jacobian(params, p, pdt_monomials, pdt_coeffs, n_hyper, dtype=np.complex128):
+        """
+        Analytical Jacobian of objective function for root-finding routines. 
+        
+        Returns:
+            ndarray[n_hyper, n_params], np.complex128]: Jacobian of each of the
+            `n_hyper` polynomials w.r.t. parameters governing intersection.
+        """
+        dim = n_hyper * 2
+        params = nb_to_complex(params)
+        p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
+
+        n_dpolys = len(pdt_monomials)
+        dT = np.empty((n_dpolys, n_hyper), dtype=dtype)
+        for i in range(n_dpolys):
+            for j in range(n_hyper):
+                dT[i,j] = nb_evaluate_poly(p_and_params, pdt_monomials[i][j], pdt_coeffs[i][j])
+
+        # use the fact that polynomials are holomorphic and 
+        # Cauchy-Riemann to calculate (deficient) Jacobian
+        dudx, dudy = np.real(dT), -np.imag(dT)
+        dT = np.zeros((dim,dim), dtype=np.float64)
+        c_dim = n_hyper
+        dT[:c_dim, :c_dim] = dudx
+        dT[:c_dim, c_dim:] = dudy
+        dT[c_dim:, :c_dim] = -dudy
+        dT[c_dim:, c_dim:] = dudx
         return dT
 
     def poly_root(self, params, p):
@@ -523,54 +552,6 @@ class PointGenerator:
 
 
 @nb.njit
-def nb_t_poly_optimise(params, p, t_monomials, t_coeffs, root=True, dtype=np.complex128):
-    """
-    Numerically optimize for the roots of these polynomial(s) over the parameters
-    of the hyperplane(s) to find the zero locus of the defining polynomial(s).
-    Note this function is holomorphic.
-    """
-    params = nb_to_complex(params)
-    p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
-    n_polys = len(t_monomials)
-    error = np.empty(n_polys, dtype=dtype)
-    for i in range(n_polys):
-        error[i] = nb_evaluate_poly(p_and_params, t_monomials[i], t_coeffs[i])
-    if root is True: return nb_to_real(error)
-
-    sum_abs_error = np.sum(np.abs(error))
-    return np.array([sum_abs_error], dtype=np.float64)
-
-@nb.njit
-def nb_t_poly_jacobian(params, p, pdt_monomials, pdt_coeffs, n_hyper, dtype=np.complex128):
-    """
-    Analytical Jacobian of objective function for root-finding routines. 
-    
-    Returns:
-        ndarray[n_hyper, n_params], np.complex128]: Jacobian of each of the
-        `n_hyper` polynomials w.r.t. parameters governing intersection.
-    """
-    dim = n_hyper * 2
-    params = nb_to_complex(params)
-    p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
-
-    n_dpolys = len(pdt_monomials)
-    dT = np.empty((n_dpolys, n_hyper), dtype=dtype)
-    for i in range(n_dpolys):
-        for j in range(n_hyper):
-            dT[i,j] = nb_evaluate_poly(p_and_params, pdt_monomials[i][j], pdt_coeffs[i][j])
-
-    # use the fact that polynomials are holomorphic and 
-    # Cauchy-Riemann to calculate (deficient) Jacobian
-    dudx, dudy = np.real(dT), -np.imag(dT)
-    dT = np.zeros((dim,dim), dtype=np.float64)
-    c_dim = n_hyper
-    dT[:c_dim, :c_dim] = dudx
-    dT[:c_dim, c_dim:] = dudy
-    dT[c_dim:, :c_dim] = -dudy
-    dT[c_dim:, c_dim:] = dudx
-    return dT
-
-@nb.njit
 def nb_to_complex(arr_real_float: np.ndarray) -> np.ndarray:
     """Converts a real array (..., N_real_coords) to complex (..., N_complex_coords)."""
     n = arr_real_float.shape[-1] // 2
@@ -595,6 +576,7 @@ def nb_evaluate_poly(x, monomials, coefficients):
     for i in range(n_monos):
         log_mono = 0.
         for c in range(n_coords):
+            if x[c] == 0: continue
             log_mono += log_x[c]*monomials[i,c]
         result += coefficients[i] * np.exp(log_mono)
     return result
@@ -628,8 +610,8 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.X24_spec
-    coeff_fn = poly_spec.X24_coefficients
+    poly_specification = poly_spec.X33_spec
+    coeff_fn = poly_spec.X33_coefficients
     psi = args.psi
     if psi is None: psi = 1.618
     coefficients = coeff_fn(psi)
