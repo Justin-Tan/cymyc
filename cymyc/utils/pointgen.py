@@ -140,10 +140,8 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    # poly_specification = poly_spec.mirror_quintic_spec
-    # coeff_fn = poly_spec.mirror_quintic_coefficients
-    poly_specification = poly_spec.fermat_quartic_spec
-    coeff_fn = poly_spec.fermat_quartic_coefficients
+    poly_specification = poly_spec.mirror_quintic_spec
+    coeff_fn = poly_spec.mirror_quintic_coefficients
     psi = args.psi
     coefficients = coeff_fn(args.psi)
     # ========================
