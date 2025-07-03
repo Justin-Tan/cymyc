@@ -39,8 +39,8 @@ class config(object):
 
     # These need to correspond to the manifold you wish to examine,
     # see `examples/poly_spec` for conventions
-    poly_specification = poly_spec.X33_spec
-    coeff_fn = poly_spec.X33_coefficients
+    poly_specification = poly_spec.mirror_quintic_spec
+    coeff_fn = poly_spec.mirror_quintic_coefficients
     deformation_fn = partial(poly_spec.X33_deformation, precision=cdtype)
 
     name = 'default'

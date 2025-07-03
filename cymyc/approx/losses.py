@@ -290,7 +290,8 @@ def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None,
         _ricci_measure = measures.ricci_measure(_data, _pb[i], metric_fn, cy_dim)
         
         # no Pfaffian
-        _chi_form_integrand = vmap(chern_gauss_bonnet.euler_characteristic_form, in_axes=(0,0,None))(_data, _pb[i], metric_fn)
+        _chi_form_integrand = vmap(chern_gauss_bonnet.euler_characteristic_form, in_axes=(0,0,None,None))(
+                _data, _pb[i], metric_fn, cy_dim)
         _chi_form = jnp.mean(_chi_form_integrand)
         S_chi_form_i = jnp.mean(jnp.square(_chi_form_integrand - _chi_form), axis=0)
 
@@ -299,6 +300,7 @@ def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None,
         n += B
 
     chi_form = chi_form * canonical_vol / vol_CY
+    print('NFUEIFGEW', chi_form.shape)
     g_inv = jnp.linalg.inv(g_pred)
     ricci_tensor = jnp.vstack(ricci_tensor)
     R = jnp.real(jnp.einsum('...ij, ...ji->...', g_inv, ricci_tensor))

@@ -18,7 +18,7 @@ import sympy as sp
 # custom
 from . import math_utils
 from . import gen_utils as utils
-from .. import alg_geo, fubini_study
+from .. import alg_geo, fubini_study, dataloading
 
 cpu_device = jax.devices('cpu')[0]
 
@@ -140,8 +140,10 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    poly_specification = poly_spec.mirror_quintic_spec
-    coeff_fn = poly_spec.mirror_quintic_coefficients
+    #poly_specification = poly_spec.mirror_quintic_spec
+    #coeff_fn = poly_spec.mirror_quintic_coefficients
+    poly_specification = poly_spec.fermat_quartic_spec
+    coeff_fn = poly_spec.fermat_quartic_coefficients
     psi = args.psi
     coefficients = coeff_fn(args.psi)
     # ========================
@@ -164,6 +166,36 @@ if __name__ == "__main__":
     
     det_g_FS_fn = fubini_study.det_fubini_study_pb
 
+    from tqdm import tqdm
+    max_batch_size = 16384
+    B = max_batch_size
+    data_batched = dataloading._online_batch(p, n_p + v_p, B)
+    weights, pullbacks, dVol_Omegas = [], [], []
+    vol_Omega, vol_g = 0., 0.
+
+    _n = 0
+    for data in tqdm(data_batched, desc="Generating metadata..."):
+        _p = data
+        _w, _pb, _dVol_Omega, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
+        _p, dQdz_monomials, dQdz_coeffs, cy_dim)
+        weights.append(_w)
+        pullbacks.append(_pb)
+        dVol_Omegas.append(_dVol_Omega)
+    
+        # compute Monge-Ampere proportionality constant
+        _det_g_FS_pb = vmap(det_g_FS_fn)(math_utils.to_real(_p), _pb)
+        _vol_g = jnp.mean(_w * _det_g_FS_pb / _dVol_Omega).item()
+        vol_g = math_utils.online_update(vol_g, _vol_g, _n, B)
+
+        _vol_Omega = jnp.mean(_w).item()
+        vol_Omega = math_utils.online_update(vol_Omega, _vol_Omega, _n, B)
+        _n += B
+
+    weights, pullbacks = np.squeeze(np.concatenate(weights, axis=0)), np.squeeze(np.concatenate(pullbacks, axis=0))
+    dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
+    p = math_utils.to_real(p)
+
+    """
     weights, pullbacks, dVol_Omegas, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
         p, dQdz_monomials, dQdz_coeffs, cy_dim)
 
@@ -172,6 +204,7 @@ if __name__ == "__main__":
     _det_g_FS_pb = vmap(det_g_FS_fn)(p, pullbacks)
     vol_g = jnp.mean(weights * _det_g_FS_pb / dVol_Omegas).item()
     vol_Omega = jnp.mean(weights).item()
+    """
 
     kappa = (vol_g / vol_Omega)
 
@@ -180,8 +213,7 @@ if __name__ == "__main__":
     chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, kmoduli, cy_dim)
     topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
     print('Wall data', topological_data)
-    print('Volume', vol)
-    print('Volume at chosen Kahler moduli', canonical_vol)
+    print(f"Volume: {vol}, Volume at chosen Kahler moduli: {canonical_vol}")
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)

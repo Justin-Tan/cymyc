@@ -233,10 +233,10 @@ def euler_characteristic_form(data: Tuple[Float[Array, "2 * i"], Float[Array, ""
                               pullbacks: Optional[Float[Array, "dim i"]], 
                               metric_fn: Callable[[Array], Array], cy_dim: int = 3) -> Float[Array, ""]:
     r"""
-    Computes the Euler characteristic via integration of the third Chern class over $X$ for a Calabi-Yau
-    threefold.
+    Computes the Euler characteristic via integration of the top Chern class over $X$ for a Calabi-Yau
+    n-fold.
 
-    $$\chi = \int_X c_3~.$$
+    $$\chi = \int_X c_n~.$$
 
     Parameters
     ----------
@@ -253,13 +253,18 @@ def euler_characteristic_form(data: Tuple[Float[Array, "2 * i"], Float[Array, ""
     Returns
     -------
     chi: array-like
-        The Euler characteristic.
+        Contribution to Euler characteristic for each point in `data`. 
     """
     p, weights, dVol_Omega = data
     p = math_utils.to_real(p)
     
     riem = curvature.riemann_tensor_kahler(p, metric_fn, pullbacks)
-    c_n = chern3(riem)
+
+    if cy_dim == 2:
+        _c_2 = chern2(riem)
+        c_n = jnp.einsum('...ij,...xy,...ixjy->...', eps_2d, eps_2d, _c_2)
+    else:
+        c_n = chern3(riem)
 
     prefactor = 1./math.factorial(cy_dim)
     norm_factor = (-2*1.j)**cy_dim * prefactor  # convert from C^3 to R^6 - convention, since dVol_{CY} = w^n/n!

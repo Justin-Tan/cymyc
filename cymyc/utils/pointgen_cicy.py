@@ -474,7 +474,7 @@ class PointGenerator:
         
         _n = 0
         print(f'Using kmoduli, {self.kmoduli}')
-        for data in tqdm(data_batched):
+        for data in tqdm(data_batched, desc="Generating metadata ..."):
             _p = data
             w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p, self.dQdz_monomials, self.dQdz_coeffs)
             weights.append(w)
@@ -495,8 +495,9 @@ class PointGenerator:
         
         p_conf = np.array(self.p_conf_mat)
         chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, self.kmoduli)
-        print('Volume', vol)
-        print('Volume at chosen Kahler moduli', canonical_vol)
+        topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
+        print('Wall data', topological_data)
+        print(f"Volume: {vol}, Volume at chosen Kahler moduli: {canonical_vol}")
 
         kappa = vol_g / vol_Omega
         self._kappa = kappa
