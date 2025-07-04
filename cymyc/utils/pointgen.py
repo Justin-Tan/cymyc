@@ -140,10 +140,8 @@ if __name__ == "__main__":
 
     # Example polynomial specification
     # ========================
-    #poly_specification = poly_spec.mirror_quintic_spec
-    #coeff_fn = poly_spec.mirror_quintic_coefficients
-    poly_specification = poly_spec.fermat_quartic_spec
-    coeff_fn = poly_spec.fermat_quartic_coefficients
+    poly_specification = poly_spec.mirror_quintic_spec
+    coeff_fn = poly_spec.mirror_quintic_coefficients
     psi = args.psi
     coefficients = coeff_fn(args.psi)
     # ========================
@@ -155,7 +153,6 @@ if __name__ == "__main__":
     n_fold = np.sum(ambient) - n_hyper
     dQdz_info = alg_geo.dQdz_poly(n_coords, monomials, coefficients)
     dQdz_monomials, dQdz_coeffs = dQdz_info
-    n_p = args.num_pts
 
     p = sample_intersect_hypersurface(key, n_p + v_p, cy_dim, monomials, coefficients)
     
@@ -167,7 +164,7 @@ if __name__ == "__main__":
     det_g_FS_fn = fubini_study.det_fubini_study_pb
 
     from tqdm import tqdm
-    max_batch_size = 16384
+    max_batch_size = (n_p + v_p) // 32
     B = max_batch_size
     data_batched = dataloading._online_batch(p, n_p + v_p, B)
     weights, pullbacks, dVol_Omegas = [], [], []
