@@ -300,7 +300,6 @@ def loss_breakdown(data, params, metric_fn, g_FS_fn, kappa=None,
         n += B
 
     chi_form = chi_form * canonical_vol / vol_CY
-    print('NFUEIFGEW', chi_form.shape)
     g_inv = jnp.linalg.inv(g_pred)
     ricci_tensor = jnp.vstack(ricci_tensor)
     R = jnp.real(jnp.einsum('...ij, ...ji->...', g_inv, ricci_tensor))

@@ -190,6 +190,46 @@ def chern3(riem: Complex[Array, "dim dim dim dim"]) -> Complex[Array, ""]:
     c3 = jnp.einsum('...ijk,...xyz,...ixjykz->...', eps_3d, eps_3d, _c3)
     return c3
 
+@jit
+def chern4(riem: Complex[Array, "dim dim dim dim"]) -> Complex[Array, ""]:
+    r"""Computes the fourth Chern class,
+
+    $$ c_4 \propto c_1^4 + c_1^2 \wedge \textsf{Tr}{\mathcal{R}}^2 + c_1 \wedge \textsf{Tr} \mathcal{R}^3 \
+          +  (\textsf{Tr}\mathcal{R}^2)^2 - \textsf{Tr}\mathcal{R}^4~. $$
+
+    Parameters
+    ----------
+    riem : array_like
+        (1,3) Riemann tensor corresponding to the Kahler connection 
+        $R^{\kappa}_{\lambda \mu \bar{\nu}}$.
+
+    Returns
+    -------
+    c4 : array_like
+        The fourth Chern form, expressed as the coefficient of the complex wedgey part 
+        in standard form: $dz^1 \wedge d\bar{z}^1 \wedge \cdots \wedge dz^n \wedge d\bar{z}^n$.
+    """
+    
+    c1 = chern1(riem)
+    c1_sq = jnp.einsum('...ab, ...cd->...abcd', c1, c1)
+    c1_qu = jnp.einsum('...ab, ...cd, ...ef, ...gh->...abcdefgh', c1, c1, c1, c1)
+
+    TrR_sq = jnp.einsum('...abij, ...bakl->...ijkl', riem, riem)
+    TrR_sq_w_TrR_sq = jnp.einsum('...ijkl, ...abcd->...ijklabcd', TrR_sq, TrR_sq)
+    TrR_cu = jnp.einsum('...abix, ...bcjy,...cakz->...ixjykz', riem, riem, riem)
+    TrR_qu = jnp.einsum('...abiw, ...bcjx, ...cdky, ...dalz->...iwjxkylz', riem, riem, riem, riem)
+
+    c1_sq_w_TrR_sq = jnp.einsum('...abcd, ...ijkl->...abcdijkl', c1_sq, TrR_sq)
+    c1_w_TrR_cu = jnp.einsum('...ab, ...cdefgh->...abcdefgh', c1, TrR_cu)
+
+    _tmp1 = (c1_qu - 6./(2*np.pi)**2 * c1_sq_w_TrR_sq - 8.j/(2*np.pi)**3 *  c1_w_TrR_cu)
+    _tmp2 = (TrR_sq_w_TrR_sq - 2. * TrR_qu)
+
+    _c4 = 1./24 * _tmp1 + 1./(2*np.pi**4) * 1./8 * _tmp2    
+    c4 = jnp.einsum('...ijkl,...wxyz,...iwjxkylz->...', eps_4d, eps_4d, _c4)
+    return c4
+
+
 @partial(jit, static_argnums=(3,))
 def euler_characteristic(data: Tuple[Float[Array, "2 * i"], Float[Array, ""], Float[Array, ""]], 
                          pullbacks: Optional[Float[Array, "dim i"]], 
