@@ -8,10 +8,10 @@ import jax.numpy as jnp
 
 import numpy as np
 
-def _online_batch(data, N, batch_size, aux=None, precision='high'):
+def _online_batch(data, N, batch_size, aux=None, precision='high', low_dtype=np.complex64):
     n_chunks = N // batch_size
     if precision != 'high':
-        data = data.astype(np.complex64)
+        data = data.astype(low_dtype)
     _p = jnp.array_split(data, n_chunks)
     if aux is not None:
         _aux = [jnp.array_split(a, n_chunks) for a in aux]
