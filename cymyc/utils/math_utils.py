@@ -15,6 +15,8 @@ def to_complex(x):
     where `x` = [Re(z) | Im(z)] <- divided into halves 
     """
     # assert x.shape[-1] % 2 == 0
+    if jnp.issubdtype(x.dtype, jnp.complexfloating):
+        return x
     c_dim = x.shape[-1] // 2
     return jax.lax.complex(x[...,0:c_dim], x[...,c_dim:])
 
@@ -266,7 +268,7 @@ def log_det_fn(p, g, *args):
     det_g = jnp.real(jnp.linalg.det(g(p, *args)))
     return jnp.log(det_g)
 
-def Pi(conf, kmoduli):
+def Pi(conf, kmoduli, cy_dim=3):
     import sympy, functools
     k, l = conf.shape[0], conf.shape[1]-1
     Pns, degrees = conf[:,0], conf[:,1:]
@@ -284,14 +286,14 @@ def Pi(conf, kmoduli):
 
     chi_terms = c_top_NX * c_X
     c2_w_J_terms = chi_terms * np.sum(Js * ts)
-    vol_terms = chi_terms * np.power(np.sum(Js * ts), 3)
+    vol_terms = chi_terms * np.power(np.sum(Js * ts), cy_dim)
     
     if len(np.array(Js).shape) == 0:
         Js = np.expand_dims(Js, 0)
 
     _t = functools.reduce(sympy.diff, zip(Js, Pns), chi_terms)
     chi = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor
-    assert type(chi) is sympy.core.numbers.Integer, 'Euler characteristic is not an integer!'
+    if chi != 0: assert type(chi) is sympy.core.numbers.Integer, 'Euler characteristic is not an integer!'
     
     _t = functools.reduce(sympy.diff, zip(Js, Pns), c2_w_J_terms)
     c2_w_J = _t.subs(list(zip(Js, np.zeros_like(Js)))) / prefactor

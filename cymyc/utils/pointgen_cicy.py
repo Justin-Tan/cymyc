@@ -23,6 +23,7 @@ from functools import partial
 
 import math, time, argparse, os
 import sympy as sp
+import numba as nb
 
 import scipy.optimize as so
 import joblib
@@ -78,7 +79,6 @@ class PointGenerator:
 
         self.t_monomials, self.t_coeffs = self.t_polynomial_data(hyperplane_eqs, poly_gens,
                                                 monomials, coefficients, self.n_hyper)
-        
         self.pdt_monomials, self.pdt_coeffs = self.t_polynomial_jacobian_data(self.t_monomials, self.t_coeffs,
                                                             self.n_coords, self.n_hyper)
         
@@ -92,9 +92,19 @@ class PointGenerator:
         key, key_, key__ = random.split(key, 3)
         pn_pts = self.sample_sphere_cicy(key_, n_p)
         params = jax.random.normal(key__, shape=(n_p, 2*self.n_hyper)) * PARAM_SCALE
+
+        pn_pts = np.array(pn_pts, dtype=np.complex128)
+        params = np.array(params, dtype=np.float64)
         
+        root_func = partial(self.nb_t_poly_optimise, t_monomials=self.t_monomials, t_coeffs=self.t_coeffs, 
+                        root=True, dtype=np.complex128)
+        jacobian_func = partial(self.nb_t_poly_jacobian, pdt_monomials=self.pdt_monomials, pdt_coeffs=self.pdt_coeffs, 
+                        n_hyper=self.n_hyper, dtype=np.complex128)
+
         with Parallel(backend='multiprocessing', batch_size=B, verbose=5, n_jobs=-1) as parallel:
-            z = parallel(delayed(self.poly_root)(par, p) for (par, p) in zip(params, pn_pts))  
+            # deprecated in favour of numba
+            # z = parallel(delayed(self.poly_root)(par, p) for (par, p) in zip(params, pn_pts))  
+            z = parallel(delayed(self.nb_poly_root)(par, p, root_func, jacobian_func) for (par, p) in zip(params, pn_pts))  
        
         res = math_utils.to_complex(np.stack(z, axis=0))
         cicy_pts = vmap(self._point_from_sol)(pn_pts, res)
@@ -187,17 +197,77 @@ class PointGenerator:
         dT = dT.at[c_dim:, :c_dim].set(-dudy)
         dT = dT.at[c_dim:, c_dim:].set(dudx)
         return dT
-    
 
-    @jit
+    @staticmethod
+    @nb.njit
+    def nb_t_poly_optimise(params, p, t_monomials, t_coeffs, root=True, dtype=np.complex128):
+        """
+        Numerically optimize for the roots of these polynomial(s) over the parameters
+        of the hyperplane(s) to find the zero locus of the defining polynomial(s).
+        Note this function is holomorphic.
+        """
+        params = nb_to_complex(params)
+        p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
+        n_polys = len(t_monomials)
+        error = np.empty(n_polys, dtype=dtype)
+        for i in range(n_polys):
+            error[i] = nb_evaluate_poly(p_and_params, t_monomials[i], t_coeffs[i])
+        if root is True: return nb_to_real(error)
+
+        sum_abs_error = np.sum(np.abs(error))
+        return np.array([sum_abs_error], dtype=np.float64)
+
+    @staticmethod
+    @nb.njit
+    def nb_t_poly_jacobian(params, p, pdt_monomials, pdt_coeffs, n_hyper, dtype=np.complex128):
+        """
+        Analytical Jacobian of objective function for root-finding routines. 
+        
+        Returns:
+            ndarray[n_hyper, n_params], np.complex128]: Jacobian of each of the
+            `n_hyper` polynomials w.r.t. parameters governing intersection.
+        """
+        dim = n_hyper * 2
+        params = nb_to_complex(params)
+        p_and_params = np.concatenate((p.reshape(-1), params), axis=-1)
+
+        n_dpolys = len(pdt_monomials)
+        dT = np.empty((n_dpolys, n_hyper), dtype=dtype)
+        for i in range(n_dpolys):
+            for j in range(n_hyper):
+                dT[i,j] = nb_evaluate_poly(p_and_params, pdt_monomials[i][j], pdt_coeffs[i][j])
+
+        # use the fact that polynomials are holomorphic and 
+        # Cauchy-Riemann to calculate (deficient) Jacobian
+        dudx, dudy = np.real(dT), -np.imag(dT)
+        dT = np.zeros((dim,dim), dtype=np.float64)
+        c_dim = n_hyper
+        dT[:c_dim, :c_dim] = dudx
+        dT[:c_dim, c_dim:] = dudy
+        dT[c_dim:, :c_dim] = -dudy
+        dT[c_dim:, c_dim:] = dudx
+        return dT
+
+    def poly_root(self, params, p):
+        sol = so.root(self.t_poly_optimize, 
+                       params, p, 
+                       jac=self.t_poly_jacobian, 
+                       method=self.METHOD)
+        return sol.x
+
+    def nb_poly_root(self, params, p, root_fun, jac_fn):
+        # numba compiled version as Jax >= 0.3.* incompatible with 
+        # multiprocessing backend
+        sol = so.root(root_fun, 
+                      params, p, 
+                      jac=jac_fn, 
+                      method=self.METHOD)
+        return sol.x
+
+    @partial(jit, static_argnums=(0,))
     def t_poly_jacobian_autodiff(self, params, p):
         return jax.jacrev(self.t_poly_optimize)(params, p)
 
-    def poly_root(self, params, p):
-        return so.root(self.t_poly_optimize, 
-                       params, p, 
-                       jac=self.t_poly_jacobian, 
-                       method=self.METHOD).x
 
     def _find_degrees(self, ambient, n_hyper, conf_mat):
         r"""Generates t-degrees in ambient space factors.
@@ -404,7 +474,7 @@ class PointGenerator:
         
         _n = 0
         print(f'Using kmoduli, {self.kmoduli}')
-        for data in tqdm(data_batched):
+        for data in tqdm(data_batched, desc="Generating metadata ..."):
             _p = data
             w, pb, _dVol_Omega, *_ = vmap(get_metadata, in_axes=(0,None,None))(_p, self.dQdz_monomials, self.dQdz_coeffs)
             weights.append(w)
@@ -425,8 +495,9 @@ class PointGenerator:
         
         p_conf = np.array(self.p_conf_mat)
         chi, c2_w_J, vol, canonical_vol = math_utils.Pi(p_conf, self.kmoduli)
-        print('Volume', vol)
-        print('Volume at chosen Kahler moduli', canonical_vol)
+        topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
+        print('Wall data', topological_data)
+        print(f"Volume: {vol}, Volume at chosen Kahler moduli: {canonical_vol}")
 
         kappa = vol_g / vol_Omega
         self._kappa = kappa
@@ -481,6 +552,45 @@ class PointGenerator:
             raise RuntimeError("kappa not initialized. Run compute_integration_parameters(...) to initialize.")
 
 
+@nb.njit
+def nb_to_complex(arr_real_float: np.ndarray) -> np.ndarray:
+    """Converts a real array (..., N_real_coords) to complex (..., N_complex_coords)."""
+    n = arr_real_float.shape[-1] // 2
+    real_part = arr_real_float[..., :n]
+    imag_part = arr_real_float[..., n:]
+    return real_part + 1j * imag_part
+
+@nb.njit
+def nb_to_real(arr_complex: np.ndarray) -> np.ndarray:
+    """Converts a complex array (..., N_complex_coords) to real (..., 2*N_complex_coords)."""
+    return np.concatenate((np.real(arr_complex), np.imag(arr_complex)), axis=-1)
+
+@nb.njit
+def nb_evaluate_poly(x, monomials, coefficients):
+    """
+    eval of polynomial given defining monomials and coefficients.
+    """
+
+    log_x = np.log(x)
+    result = 0.
+    n_coords, n_monos = len(x), len(monomials)
+    for i in range(n_monos):
+        log_mono = 0.
+        for c in range(n_coords):
+            if x[c] == 0: continue
+            log_mono += log_x[c]*monomials[i,c]
+        result += coefficients[i] * np.exp(log_mono)
+    return result
+
+@nb.njit
+def nb_batch_evaluate_poly(x, monomials, coefficients, dtype=np.complex128):
+    B = x.shape[0]
+    result = np.zeros(B, dtype=dtype)
+    for i in range(B):
+        result[i] = nb_evaluate_poly(x[i], monomials, coefficients)
+    return result
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="CICY point generation.",
@@ -514,7 +624,6 @@ if __name__ == "__main__":
     
     # generate points and integration data
     cicy_pts = pg_cicy.sample_intersect_cicy(key, n_p + v_p)
-    # integration_params = pg_cicy.compute_integration_parameters(cicy_pts, n_p, v_p)
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)

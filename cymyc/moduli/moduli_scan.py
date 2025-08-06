@@ -29,7 +29,7 @@ def gen_points(key, psi, n_p, coeff_fn, cy_dim,
     coefficients = coeff_fn(psi)
 
     # Initialize point generator
-    pg = pointgen_cicy.PointGenerator(key, cy_dim, monomials, coefficients, ambient)
+    pg = pointgen_cicy.PointGenerator(key, cy_dim, monomials, ambient, coefficients)
     p = pg.sample_intersect_cicy(key, n_p)
 
     return p
