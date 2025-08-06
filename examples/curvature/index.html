@@ -1,0 +1,1654 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the cymyc software library.">
+      
+      
+        <meta name="author" content="Justin Tan">
+      
+      
+        <link rel="canonical" href="https://justin-tan.github.io/cymyc/examples/curvature/">
+      
+      
+        <link rel="prev" href="../../faq/">
+      
+      
+        <link rel="next" href="../metric_approx/">
+      
+      
+      <link rel="icon" href="../../_static/favicon-32x32.png">
+      <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.29">
+    
+    
+      
+        <title>Curvature - cymyc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.76a95c52.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="https://unpkg.com/katex@0/dist/katex.min.css">
+    
+      <link rel="stylesheet" href="../../_static/custom_css.css">
+    
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
+    
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
+    
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#curvature" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="cymyc" class="md-header__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            cymyc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Curvature
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5c-.84 0-1.65.15-2.39.42L12 2M3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29L3.34 7m.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14L3.36 17M20.65 7l-1.77 3.79a7.023 7.023 0 0 0-2.38-4.15l4.15.36m-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29L20.64 17M12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44L12 22Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../faq/" class="md-tabs__link">
+        
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/curvature/" class="md-tabs__link">
+          
+  
+  Basic API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="cymyc" class="md-nav__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    cymyc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+  
+  <span class="md-ellipsis">
+    Getting started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2m1-16A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-4 4h2a2 2 0 0 1 2-2 2 2 0 0 1 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5a4 4 0 0 0-4-4Z"/></svg>
+  
+  <span class="md-ellipsis">
+    FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Examples
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#manifold-definition-point-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifold definition / point sampling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metric-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      Metric definition
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Metric definition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-kahler-potential" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Kähler potential
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#riemann-tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      Riemann tensor
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Riemann tensor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#first-bianchi-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      First Bianchi identity
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ricci-curvature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ricci curvature
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metric_approx/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Calabi-Yau metrics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harmonic/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic forms
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Example workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Basic API
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Basic API
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Geometry
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            Geometry
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/curvature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/chern_gauss_bonnet/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Chern gauss bonnet
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/fubini_study/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fubini study
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/moduli_space/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Moduli space
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Approximations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            Approximations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/losses/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Losses
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Models
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/harmonic/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script>
+(function() {
+  function addWidgetsRenderer() {
+    var requireJsScript = document.createElement('script');
+    requireJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js';
+
+    var mimeElement = document.querySelector('script[type="application/vnd.jupyter.widget-view+json"]');
+    var jupyterWidgetsScript = document.createElement('script');
+    var widgetRendererSrc = 'https://unpkg.com/@jupyter-widgets/html-manager@*/dist/embed-amd.js';
+    var widgetState;
+
+    // Fallback for older version:
+    try {
+      widgetState = mimeElement && JSON.parse(mimeElement.innerHTML);
+
+      if (widgetState && (widgetState.version_major < 2 || !widgetState.version_major)) {
+        widgetRendererSrc = 'jupyter-js-widgets@*/dist/embed.js';
+      }
+    } catch(e) {}
+
+    jupyterWidgetsScript.src = widgetRendererSrc;
+
+    document.body.appendChild(requireJsScript);
+    document.body.appendChild(jupyterWidgetsScript);
+  }
+
+  document.addEventListener('DOMContentLoaded', addWidgetsRenderer);
+}());
+</script>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="curvature">Curvature<a class="headerlink" href="#curvature" title="Permanent link">¤</a></h1>
+<p>In this introductory example we compute various curvature quantities from the Riemannian metric on a manifold and compare against analytically known results. Everything here should be accessible with a basic knowledge of scientific computing and differential geometry. There are two Jax-specific transformations which we explain briefly below, for more detail please see the <a href="https://jax.readthedocs.io/en/latest/notebooks/thinking_in_jax.html#how-to-think-in-jax">official guides</a>.</p>
+<ul>
+<li><code>jax.jit</code>: Short for Just-in-Time compilation, this converts Jax Python functions to an optimised sequence of primitive operations which are then passed to some hardware accelerator. The output of <code>jit</code> is another function - usually one that executes significantly faster than the Python equivalent. The price to be paid is that the program logic of a <code>jit</code>-compatible function is constrained by the compiler, so you don't want (or need) to <code>jit</code> everything.</li>
+<li><code>jax.vmap</code>: Short for Vectorising Map, this transforms Jax Python functions written for execution on a single array element, to one which is automatically vectorised across the specified array axes. Again, program logic of a <code>vmap</code>-compatible function is restricted.</li>
+</ul>
+<p>Jax transformations are compatible - you can <code>jit</code> a <code>vmap</code>-ed function and vice-versa. And that's pretty much all you need to know to understand this example!</p>
+<p>While not a dependency of the package, the example notebooks require the installation of <code>jupyter</code>, run this locally if you haven't already.
+<div class="highlight"><pre><span></span><code>pip install --upgrade jupyter notebook
+</code></pre></div></p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">random</span><span class="p">,</span> <span class="n">jit</span><span class="p">,</span> <span class="n">vmap</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
+
+<span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="manifold-definition-point-sampling">Manifold definition / point sampling<a class="headerlink" href="#manifold-definition-point-sampling" title="Permanent link">¤</a></h2>
+<p>The routines in this library will work for an arbitrary real or complex manifold from which points may be sampled from. In this example, we consider complex projective space <span class="arithmatex">\(\mathbb{P}^n\)</span>. This the space of complex lines in <span class="arithmatex">\(\mathbb{C}^{n+1}\)</span> which pass through the origin.</p>
+<p>To sample from <span class="arithmatex">\(\mathbb{P}^n\)</span>, we use the fact that every complex line intersects the unit sphere along a circle, whose <span class="arithmatex">\(U(1)\)</span> action we mod out, <span class="arithmatex">\(\mathbb{P}^n \simeq S^{2n+1} / U(1)\)</span>. This means that samples from the unit sphere, appropriately complexified, give samples in homogeneous coordinates on projective space. Here we set <span class="arithmatex">\(n=5\)</span>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">cymyc.utils</span> <span class="kn">import</span> <span class="n">math_utils</span>
+
+<span class="n">ambient_dim</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span> <span class="c1"># 42</span>
+<span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<span class="n">rng</span><span class="p">,</span> <span class="n">_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">S2np1_uniform</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">n_p</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Sample `n_p` points uniformly on the unit sphere $S^{2n+1}$, treated as CP^n</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># return random.uniform(key, (n,))*jnp.pi, random.uniform(key, (n,)) * 2 * jnp.pi</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n_p</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">)),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="n">x_norm</span> <span class="o">=</span> <span class="n">x</span> <span class="o">/</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">sample</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">to_complex</span><span class="p">(</span><span class="n">x_norm</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">Z</span> <span class="o">=</span> <span class="n">S2np1_uniform</span><span class="p">(</span><span class="n">_rng</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">ambient_dim</span><span class="p">)</span>
+<span class="n">Z</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array([[ 0.02736979-0.22389161j,  0.25014222-0.34731673j,
+        -0.00753072-0.29925316j,  0.25562023+0.29378541j,
+        -0.05679859-0.20567943j,  0.04690634+0.12982876j,
+         0.15532516+0.14336839j,  0.20046198-0.38581777j,
+        -0.26256972+0.28638481j, -0.12090856-0.13025232j,
+         0.00636905+0.20921725j],
+       [ 0.00833806-0.12314272j,  0.33281516+0.1516645j ,
+        -0.1483373 -0.16471397j, -0.1052314 +0.2249917j ,
+        -0.08208166-0.10561346j,  0.49581376-0.1674636j ,
+        -0.00324378-0.21552658j,  0.24867794-0.19161808j,
+        -0.14643599+0.17849217j,  0.41380261-0.19468098j,
+        -0.17593772-0.09995519j],
+       [ 0.27014354+0.43684002j, -0.20377776-0.11443033j,
+        -0.21397595-0.00243355j,  0.1063651 +0.17664001j,
+        -0.41157039-0.09987887j,  0.07792631+0.01783108j,
+        -0.1407708 -0.14530487j, -0.00628455-0.20375251j,
+        -0.26621185+0.2402969j , -0.12324527-0.3368604j ,
+        -0.08962662+0.24437101j],
+       [ 0.298288  +0.0090613j , -0.09293679+0.12098218j,
+         0.15873836+0.30437709j,  0.09010836+0.24775444j,
+         0.12491493+0.0599167j ,  0.06105556+0.02011806j,
+        -0.06107647-0.08125648j,  0.39116699+0.09845587j,
+        -0.06334902+0.10514544j, -0.37315632+0.03532256j,
+         0.1744366 -0.5638871j ],
+       [-0.03686343-0.11681997j, -0.04676194-0.14645691j,
+         0.16080594-0.16616212j,  0.16180508+0.22286588j,
+        -0.20503923+0.14494859j,  0.2959065 -0.2568473j ,
+         0.28694812-0.21742779j, -0.29545629+0.15549756j,
+        -0.43242921-0.02473469j,  0.20736562+0.35661549j,
+        -0.10635665+0.07263177j],
+       [ 0.37908512+0.22849334j,  0.012651  -0.37016357j,
+         0.22781669-0.11919621j,  0.14999072+0.33529792j,
+         0.17039864+0.07631351j,  0.31776397-0.03556206j,
+         0.22090967+0.03842842j,  0.13607875+0.32494174j,
+        -0.24973331+0.02489945j, -0.10798666-0.08427205j,
+         0.21141219-0.16717926j],
+       [ 0.1293235 +0.20853088j,  0.11784573-0.14996482j,
+        -0.26778802+0.11306106j,  0.0662057 +0.04690227j,
+         0.37957281-0.12004818j,  0.27164364+0.26007059j,
+        -0.22151153-0.03442996j,  0.10460384+0.45146498j,
+        -0.15981234-0.348539j  ,  0.08582687+0.19522458j,
+        -0.20275629-0.11746974j],
+       [ 0.2527872 +0.06671784j, -0.10444607+0.02656615j,
+         0.08960571-0.07636178j,  0.08993089-0.34046328j,
+        -0.20523979+0.51587811j, -0.33898292-0.14847849j,
+         0.17718462+0.22234663j,  0.0333801 -0.30936953j,
+         0.20401253-0.20578521j,  0.12323492-0.24393537j,
+        -0.0247256 +0.00575643j],
+       [-0.00236344-0.47434857j,  0.35553164-0.21107713j,
+         0.10827872-0.14736322j,  0.0215133 +0.04707496j,
+        -0.24504572-0.09207816j, -0.3192196 +0.02622722j,
+         0.02600101+0.03722147j, -0.21314049-0.04537127j,
+        -0.1855012 -0.37369281j, -0.31240302-0.2581296j ,
+        -0.08234807-0.04673321j],
+       [ 0.12391426-0.15099357j, -0.10282917-0.07848328j,
+         0.26018045-0.39339781j, -0.12754509+0.16708262j,
+         0.12648189-0.10537365j,  0.02287195+0.006204j  ,
+         0.0445617 -0.0977747j , -0.37106113+0.25683421j,
+        -0.13924258+0.10475447j,  0.45967485+0.29416271j,
+         0.27354486-0.18053403j]], dtype=complex128)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>We now use the scaling freedom in projective space to convert homogeneous coords on <span class="arithmatex">\(\mathbb{C}\mathbb{P}^n\)</span>, <span class="arithmatex">\(\left[z_0 : \cdots : z_n\right]\)</span> to inhomogeneous coords in some local coordinate chart where <span class="arithmatex">\(z_{\alpha}\)</span> nonzero, setting <span class="arithmatex">\(z_{\alpha} = 1\)</span> and removing it from the coordinate description,</p>
+<div class="arithmatex">\[\left[z_0 : \cdots : z_n\right] \mapsto \left(\frac{z_0}{z_{\alpha}}, \ldots, \frac{z_{\alpha-1}}{z_{\alpha}}, \frac{z_{\alpha+1}}{z_{\alpha}}, \ldots, \frac{z_n}{z_{\alpha}}\right) \triangleq \zeta^{(\alpha)}~. \]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">Z</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">rescale</span><span class="p">(</span><span class="n">Z</span><span class="p">)</span>
+<span class="n">z</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">math_utils</span><span class="o">.</span><span class="n">_inhomogenize</span><span class="p">)(</span><span class="n">Z</span><span class="p">)</span>
+<span class="n">z</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>(10, 10)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="metric-definition">Metric definition<a class="headerlink" href="#metric-definition" title="Permanent link">¤</a></h2>
+<p>There is a natural metric on <span class="arithmatex">\(\mathbb{P}^n\)</span> - the <strong>Fubini-Study metric</strong>. Viewing <span class="arithmatex">\(\mathbb{P}^n\)</span> as the quotient <span class="arithmatex">\(S^{2n+1} / U(1)\)</span>, the Fubini_study metric is the unique metric such that the projection <span class="arithmatex">\(\pi: S^{2n+1} \rightarrow \mathbb{P}^n\)</span> is a Riemannian submersion. In inhomogeneous coordinates,</p>
+<div class="arithmatex">\[ g_{\mu \bar{\nu}} = \frac{1}{\sigma}\left( \delta_{\mu \overline{\nu}} - \frac{\zeta_{\mu}\zeta_{\bar{\nu}}}{\sigma}\right), \quad \sigma = 1 + \sum_{m=1}^n \zeta_m\bar{\zeta}_m~. \]</div>
+<p>The function below returns the FS metric in local coordinates. Note it requires a real input for autodiff to play nice, so we use the map </p>
+<div class="arithmatex">\[z = (z_1, \ldots, z_n) \in \mathbb{C}^n \mapsto (\Re(z_1), \ldots, \Re(z_n); \Im(z_1), \ldots, \Im(z_n)) \in \mathbb{R}^{2n}~.\]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">fubini_study_metric</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns FS metric in CP^n evaluated at `p`.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">        `p`     : 2*complex_dim real inhomogeneous coords at </span>
+<span class="sd">                  which metric matrix is evaluated. Shape [i].</span>
+<span class="sd">    Returns</span>
+<span class="sd">    ----------</span>
+<span class="sd">        `g`     : Hermitian metric in CP^n, $g_{ij}$. Shape [i,j].</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Inhomogeneous coords</span>
+    <span class="n">complex_dim</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">//</span><span class="mi">2</span>
+    <span class="n">zeta</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">complex</span><span class="p">(</span><span class="n">p</span><span class="p">[:</span><span class="n">complex_dim</span><span class="p">],</span>
+                           <span class="n">p</span><span class="p">[</span><span class="n">complex_dim</span><span class="p">:])</span>
+    <span class="n">zeta_bar</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">conjugate</span><span class="p">(</span><span class="n">zeta</span><span class="p">)</span>
+    <span class="n">zeta_sq</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">zeta</span> <span class="o">*</span> <span class="n">zeta_bar</span><span class="p">)</span>
+
+    <span class="n">zeta_outer</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...i,...j-&amp;gt;...ij&#39;</span><span class="p">,</span> <span class="n">zeta_bar</span><span class="p">,</span> <span class="n">zeta</span><span class="p">)</span>
+
+    <span class="n">delta_mn</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">complex_dim</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">complex64</span><span class="p">)</span> 
+
+    <span class="n">g_FS</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">divide</span><span class="p">(</span><span class="n">delta_mn</span> <span class="o">*</span> <span class="n">zeta_sq</span> <span class="o">-</span> <span class="n">zeta_outer</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">zeta_sq</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">g_FS</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">p</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">to_real</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+<span class="n">g_FS</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">)(</span><span class="n">p</span><span class="p">)</span>
+<span class="n">g_FS</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>(10, 10, 10)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>We can benchmark execution times with and without <code>jit</code>-compilation - note the exact speedup will depend on the hardware available. </p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="o">%%</span><span class="n">timeit</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">)(</span><span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>6.09 ms ± 271 μs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="o">%%</span><span class="n">timeit</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">jit</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">))(</span><span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>629 μs ± 11.5 μs per loop (mean ± std. dev. of 7 runs, 1,000 loops each)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="the-kahler-potential">The Kähler potential<a class="headerlink" href="#the-kahler-potential" title="Permanent link">¤</a></h3>
+<p><span class="arithmatex">\(\mathbb{P}^n\)</span> is a Kähler manifold - this imbues it with many special properties, one of them being that the metric is locally determined by a single real scalar function, the Kähler potential, <span class="arithmatex">\(\mathcal{K} \in C^{\infty}(\mathbb{P}^n)\)</span>.</p>
+<div class="arithmatex">\[\begin{align*}
+g_{\mu \bar{\nu }} &amp;= \partial_{\mu}\overline{\partial}_{\bar{\nu}} \mathcal{K}~, \\
+\mathcal{K} &amp;= \log \left( 1+ \sum_{m=1}^n \left\vert \zeta_m \right\vert^2\right)~.
+\end{align*}\]</div>
+<p>This is particularly important in the context of approximating metrics, as it allows one to reduce the problem to approximation of a single scalar function.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">fubini_study_potential</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns Kahler potential associated with the FS metric</span>
+<span class="sd">    in CP^n evaluated at `p`.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">        `p`        : 2*complex_dim real inhomogeneous coords at </span>
+<span class="sd">                     which potential is evaluated. Shape [i].</span>
+<span class="sd">    Returns</span>
+<span class="sd">    ----------</span>
+<span class="sd">        `phi`      : Kahler potential, real scalar. Shape [].  </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">zeta_sq</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">p</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">1.</span> <span class="o">+</span> <span class="n">zeta_sq</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">cymyc</span> <span class="kn">import</span> <span class="n">curvature</span>
+<span class="n">_g_FS</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">curvature</span><span class="o">.</span><span class="n">del_z_bar_del_z</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">fubini_study_potential</span><span class="p">)</span>
+<span class="n">_g_FS</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>(10, 10, 10)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">g_FS</span><span class="p">,</span> <span class="n">_g_FS</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array(True, dtype=bool)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="riemann-tensor">Riemann tensor<a class="headerlink" href="#riemann-tensor" title="Permanent link">¤</a></h2>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Measures of curvature corresponding to a given metric tensor involve derivatives of the metric - if a function corresponding to the metric tensor is known, these may be easily computed numerically using autodiff. The most important curvature quantity is the Riemann curvature - the endomorphism-valued two-form that informs us about local curvature effects, <span class="arithmatex">\(\textsf{Riem} \in \Omega^2(X; \textsf{End}(T_X))\)</span>.</p>
+<p>Schematically, the curvature tensor is given by taking two derivatives of the metric tensor w.r.t. the input coordinates. <span class="arithmatex">\(\Gamma\)</span> below refers to the Levi-Civita connection in local coordinates,</p>
+<div class="arithmatex">\[\textsf{Riem} \sim \partial \Gamma + \Gamma \cdot \Gamma, \quad \Gamma \sim g^{-1} \partial g~.\]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">riem</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">curvature</span><span class="o">.</span><span class="n">riemann_tensor_kahler</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">Partial</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>This involves two derivatives of a potentially expensive function, but is reasonably speedy for even <span class="arithmatex">\(10^4\)</span> points, as we can test by benchmarking - in this case the function is already <code>jit</code>-ed at definition. Note nested <code>jit</code>s are equivalent to a single <code>jit</code>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="o">%%</span><span class="n">timeit</span>
+<span class="n">riem</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">curvature</span><span class="o">.</span><span class="n">riemann_tensor_kahler</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">Partial</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">))</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<span class="n">riem</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>1.54 ms ± 65.2 μs per loop (mean ± std. dev. of 7 runs, 1,000 loops each)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">rtk</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">curvature</span><span class="o">.</span><span class="n">riemann_tensor_kahler</span><span class="p">,</span> <span class="n">return_aux</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">_</span><span class="p">,</span> <span class="n">riem</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">rtk</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">Partial</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">riem</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...abcd, ...ae-&amp;gt;...becd&#39;</span><span class="p">,</span> <span class="n">riem</span><span class="p">,</span> <span class="n">g_FS</span><span class="p">)</span>
+<span class="n">riem</span><span class="o">.</span><span class="n">shape</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>(10, 10, 10, 10, 10)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="first-bianchi-identity">First Bianchi identity<a class="headerlink" href="#first-bianchi-identity" title="Permanent link">¤</a></h3>
+<p>We form the Riemann tensor with all indices lowered using the musical isomorphism defined by the metric. The resulting tensor satisifies the following symmetries, as a consequence of the first Bianchi identity,</p>
+<div class="arithmatex">\[ \textsf{Riem}_{a\overline{b}c\overline{d}} = \textsf{Riem}_{a \overline{d} c \overline{b}} = \textsf{Riem}_{c \overline{b} a \overline{d}} = \textsf{Riem}_{c \overline{d} a \overline{b}}~.\]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">riem_lower</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...ibcd, ...ia-&amp;gt;...bacd&#39;</span><span class="p">,</span> <span class="n">riem</span><span class="p">,</span> <span class="n">g_FS</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">riem_lower</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...abcd-&amp;gt;...adcb&#39;</span><span class="p">,</span> <span class="n">riem_lower</span><span class="p">))</span>  <span class="c1"># first equality</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array(False, dtype=bool)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">riem_lower</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...abcd-&amp;gt;...cbad&#39;</span><span class="p">,</span> <span class="n">riem_lower</span><span class="p">))</span>  <span class="c1"># second equality</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array(True, dtype=bool)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">riem_lower</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...abcd-&amp;gt;...cdab&#39;</span><span class="p">,</span> <span class="n">riem_lower</span><span class="p">))</span>  <span class="c1"># third equality</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array(False, dtype=bool)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="ricci-curvature">Ricci curvature<a class="headerlink" href="#ricci-curvature" title="Permanent link">¤</a></h2>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Complex projective space is an Einstein manifold, meaning that the Fubini-Study metric on <span class="arithmatex">\(\mathbb{P}^n\)</span> is proportional to the Ricci curvature. The Ricci curvature is another important measure of curvature derived from <span class="arithmatex">\(\textsf{Riem}\)</span>, which roughly measures the degree of volume distortion relative to Euclidean space as one travels along geodesics emanating from a given point.</p>
+<div class="arithmatex">\[\textsf{Ric} = \Lambda g~.\]</div>
+<p>For <span class="arithmatex">\(\mathbb{P}^n\)</span> the Einstein constant is <span class="arithmatex">\(\Lambda = n+1; \textsf{Ric} = (n+1) g_{FS}\)</span>.</p>
+<p>The Ricci curvature is given, in local coordinates, as the trace of the endomorphism part of the Riemann curvature tensor,</p>
+<div class="arithmatex">\[ \textsf{Ric}_{\mu \bar{\nu}} \triangleq \textsf{Riem}^{\kappa}_{\; \kappa \mu \bar{\nu}} = \textsf{Riem}^{\kappa}_{\; \mu \kappa \bar{\nu}}~.\]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">ricci</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">curvature</span><span class="o">.</span><span class="n">ricci_tensor_kahler</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">Partial</span><span class="p">(</span><span class="n">fubini_study_metric</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">ricci</span><span class="p">,</span> <span class="p">(</span><span class="n">ambient_dim</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">g_FS</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array(True, dtype=bool)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>This also means that the Ricci scalar, the trace of the Ricci curvature, should be, on <span class="arithmatex">\(\mathbb{P}^n\)</span>:</p>
+<div class="arithmatex">\[ \textsf{R} = n(n+1)~.\]</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;...ba, ...ab&#39;</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">g_FS</span><span class="p">),</span> <span class="n">ricci</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>Array([110.+8.26087339e-16j, 110.-4.13292887e-16j, 110.+6.68198714e-16j,
+       110.-6.83617305e-17j, 110.-1.03265506e-15j, 110.-1.35128649e-15j,
+       110.+7.40287060e-16j, 110.+4.10574786e-16j, 110.+1.34577413e-15j,
+       110.+1.86926177e-15j], dtype=complex128)</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var tab,labels=set.querySelector(".tabbed-labels");for(tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; 2024 <a href="https://github.com/justin-tan"  target="_blank" rel="noopener">Justin Tan</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "toc.integrate", "header.autohide", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.tabs.link", "content.code.annotation", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.fe8b6f2b.min.js"></script>
+      
+        <script src="../../_static/katex.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+      
+    
+  </body>
+</html>

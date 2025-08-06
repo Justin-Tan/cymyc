@@ -1,0 +1,1727 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the cymyc software library.">
+      
+      
+        <meta name="author" content="Justin Tan">
+      
+      
+        <link rel="canonical" href="https://justin-tan.github.io/cymyc/examples/metric_approx/">
+      
+      
+        <link rel="prev" href="../curvature/">
+      
+      
+        <link rel="next" href="../harmonic/">
+      
+      
+      <link rel="icon" href="../../_static/favicon-32x32.png">
+      <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.29">
+    
+    
+      
+        <title>Calabi-Yau metrics - cymyc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.76a95c52.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="https://unpkg.com/katex@0/dist/katex.min.css">
+    
+      <link rel="stylesheet" href="../../_static/custom_css.css">
+    
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
+    
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
+    
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#approximation-of-the-ricci-flat-metric-on-a-manifold" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="cymyc" class="md-header__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            cymyc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Calabi-Yau metrics
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5c-.84 0-1.65.15-2.39.42L12 2M3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29L3.34 7m.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14L3.36 17M20.65 7l-1.77 3.79a7.023 7.023 0 0 0-2.38-4.15l4.15.36m-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29L20.64 17M12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44L12 22Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../faq/" class="md-tabs__link">
+        
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../curvature/" class="md-tabs__link">
+          
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/curvature/" class="md-tabs__link">
+          
+  
+  Basic API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="cymyc" class="md-nav__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    cymyc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+  
+  <span class="md-ellipsis">
+    Getting started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2m1-16A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-4 4h2a2 2 0 0 1 2-2 2 2 0 0 1 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5a4 4 0 0 0-4-4Z"/></svg>
+  
+  <span class="md-ellipsis">
+    FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Examples
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../curvature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Calabi-Yau metrics
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Calabi-Yau metrics
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#manifold-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manifold definition
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#point-sampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Point sampling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Point sampling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dataset-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dataset metadata
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ricci-flat-metric-optimisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ricci-flat metric optimisation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ricci-flat metric optimisation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#model-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model construction
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimisation-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Optimisation loop
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sanity-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sanity check
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../harmonic/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic forms
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Example workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Basic API
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Basic API
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Geometry
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            Geometry
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/curvature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/chern_gauss_bonnet/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Chern gauss bonnet
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/fubini_study/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fubini study
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/moduli_space/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Moduli space
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Approximations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            Approximations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/losses/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Losses
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Models
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/harmonic/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script>
+(function() {
+  function addWidgetsRenderer() {
+    var requireJsScript = document.createElement('script');
+    requireJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js';
+
+    var mimeElement = document.querySelector('script[type="application/vnd.jupyter.widget-view+json"]');
+    var jupyterWidgetsScript = document.createElement('script');
+    var widgetRendererSrc = 'https://unpkg.com/@jupyter-widgets/html-manager@*/dist/embed-amd.js';
+    var widgetState;
+
+    // Fallback for older version:
+    try {
+      widgetState = mimeElement && JSON.parse(mimeElement.innerHTML);
+
+      if (widgetState && (widgetState.version_major < 2 || !widgetState.version_major)) {
+        widgetRendererSrc = 'jupyter-js-widgets@*/dist/embed.js';
+      }
+    } catch(e) {}
+
+    jupyterWidgetsScript.src = widgetRendererSrc;
+
+    document.body.appendChild(requireJsScript);
+    document.body.appendChild(jupyterWidgetsScript);
+  }
+
+  document.addEventListener('DOMContentLoaded', addWidgetsRenderer);
+}());
+</script>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="approximation-of-the-ricci-flat-metric-on-a-manifold">Approximation of the Ricci-flat metric on a manifold<a class="headerlink" href="#approximation-of-the-ricci-flat-metric-on-a-manifold" title="Permanent link">¤</a></h1>
+<p>In this example notebook we consider a simple complex manifold <span class="arithmatex">\(X\)</span>, and approximate the metric tensor on <span class="arithmatex">\(X\)</span> by optimisation of a variational objective derived from a PDE the metric tensor should solve.</p>
+<p>In more detail, the manifold <span class="arithmatex">\(X\)</span> is a Calabi-Yau threefold defined as a projective variety in <span class="arithmatex">\(\mathbb{P}^5\)</span>. This is the (mirror of the) intersection of two cubics in the ambient <span class="arithmatex">\(\mathbb{P}^5\)</span>.</p>
+<p>We wish to approximate the unique Ricci-flat metric on <span class="arithmatex">\(X\)</span> - that is, one whose associated Ricci curvature vanishes. We sample points from the manifold and obtain an approximation to the Ricci-flat metric via optimisation of an objective constructed from the Monge-Ampere equation.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">random</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
+
+<span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">cymyc.utils.pointgen_cicy</span> <span class="kn">import</span> <span class="n">PointGenerator</span> 
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="manifold-definition">Manifold definition<a class="headerlink" href="#manifold-definition" title="Permanent link">¤</a></h2>
+<p>The manifold is explicitly defined as the zero locus of the following polynomials in the complex projective space <span class="arithmatex">\(\mathbb{P}^5\)</span>, where we let <span class="arithmatex">\(Z_i\)</span> denote local coordinates in the ambient projective space;</p>
+<div class="arithmatex">\[\begin{align*}
+P_1 &amp;= Z_0^3 + Z_1^3 + Z_2^3 - 3 \psi Z_3 Z_4 Z_5~, \\
+P_2 &amp;= Z_3^3 + Z_4^3 + Z_5^3 - 3 \psi Z_0 Z_1 Z_2~.
+\end{align*}\]</div>
+<p>The single complex structure moduli direction corresponds to the trilinear polynomial deformations above, parameterised by <span class="arithmatex">\(\psi \in \mathbb{C}\)</span>. We'll choose the point <span class="arithmatex">\(\psi = 0.5\)</span> in moduli space, which is away from singularities in the moduli space - see <a href="https://arxiv.org/abs/2407.13836">this article for more details</a>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># Choose value of moduli parameter psi</span>
+<span class="n">psi</span> <span class="o">=</span> <span class="mf">0.5</span>
+
+<span class="n">monomials_1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span>
+    <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+
+<span class="n">monomials_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+    <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+
+<span class="n">monomials</span> <span class="o">=</span> <span class="p">[</span><span class="n">monomials_1</span><span class="p">,</span> <span class="n">monomials_2</span><span class="p">]</span>
+
+<span class="n">cy_dim</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">kmoduli</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ambient</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">5</span><span class="p">])</span>
+<span class="n">dim</span> <span class="o">=</span> <span class="mi">6</span>
+
+<span class="n">coeff_fn</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">psi</span><span class="p">:</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="o">-</span><span class="mf">3.0</span><span class="o">*</span><span class="n">psi</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="o">-</span><span class="mf">3.0</span><span class="o">*</span><span class="n">psi</span><span class="p">)]</span>
+<span class="n">coefficients</span> <span class="o">=</span> <span class="n">coeff_fn</span><span class="p">(</span><span class="n">psi</span><span class="p">)</span>
+<span class="n">poly_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">monomials</span><span class="p">,</span> <span class="n">cy_dim</span><span class="p">,</span> <span class="n">kmoduli</span><span class="p">,</span> <span class="n">ambient</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="point-sampling">Point sampling<a class="headerlink" href="#point-sampling" title="Permanent link">¤</a></h2>
+<p>We need to sample points from <span class="arithmatex">\(X \hookrightarrow \mathbb{P}^n\)</span> according to a known distribution in order to evaluate integrals via Monte Carlo integration. One way of doing this is to utilise the identification <span class="arithmatex">\(\mathbb{P}^n \simeq S^{2n+1} / U(1)\)</span>.</p>
+<p>First we sample uniformly from the sphere <span class="arithmatex">\(S^{2n+1}\)</span>, obtaining a uniformly distributed sample over <span class="arithmatex">\(\mathbb{P}^n\)</span>. Next, one constructs a line connecting pairs of points <span class="arithmatex">\(p,q \in \mathbb{P}^n\)</span>, and identifies the points of intersection with the zero locus <span class="arithmatex">\(\{P_i=0\}_i\)</span>. These points are distributed according to a quantifiable distribution <span class="arithmatex">\(dA\)</span> on <span class="arithmatex">\(X\)</span>. We correct for the fact that these points are not uniformly distributed according to the canonical measure on <span class="arithmatex">\(X\)</span> by computing the associated importance weights <a href="https://doi.org/10.1063/1.2888403">(Douglas et. al (2008))</a>. </p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">seed</span> <span class="o">=</span> <span class="mi">42</span>
+<span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<span class="n">rng</span><span class="p">,</span> <span class="n">pg_rng</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rng</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="n">dpath</span> <span class="o">=</span> <span class="s2">&quot;data/X33_demo&quot;</span>
+
+<span class="n">n_p</span> <span class="o">=</span> <span class="mi">400000</span>  <span class="c1"># Number of training points</span>
+<span class="n">v_p</span> <span class="o">=</span> <span class="mi">200000</span>  <span class="c1"># Number of validation points</span>
+
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s1">&#39;ignore&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">pg_cicy</span> <span class="o">=</span> <span class="n">PointGenerator</span><span class="p">(</span><span class="n">rng</span><span class="p">,</span> <span class="n">cy_dim</span><span class="p">,</span> <span class="n">monomials</span><span class="p">,</span> <span class="n">ambient</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">,</span> <span class="n">kmoduli</span><span class="p">)</span>
+<span class="n">cicy_pts</span> <span class="o">=</span> <span class="n">pg_cicy</span><span class="o">.</span><span class="n">sample_intersect_cicy</span><span class="p">(</span><span class="n">init_rng</span><span class="p">,</span> <span class="n">n_p</span> <span class="o">+</span> <span class="n">v_p</span><span class="p">)</span>
+<span class="n">pg_cicy</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">dpath</span><span class="p">,</span> <span class="n">cicy_pts</span><span class="p">,</span> <span class="n">n_p</span><span class="p">,</span> <span class="n">v_p</span><span class="p">,</span> <span class="n">psi</span><span class="p">,</span> <span class="n">poly_data</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Generating 600000 points ...
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>[Parallel(n_jobs=-1)]: Using backend MultiprocessingBackend with 16 concurrent workers.
+[Parallel(n_jobs=-1)]: Done   4 tasks      | elapsed:   16.2s
+[Parallel(n_jobs=-1)]: Done 150752 tasks      | elapsed:  1.1min
+[Parallel(n_jobs=-1)]: Done 489872 tasks      | elapsed:  2.5min
+[Parallel(n_jobs=-1)]: Done 603010 out of 603010 | elapsed:  2.9min finished
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Max locus violation: 1.67721e-13
+Using kmoduli, [1.]
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 12/12 [00:04&lt;00:00,  2.97it/s]
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Volume 9*t_0**3
+Volume at chosen Kahler moduli 9.0
+kappa: 0.0393404
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="dataset-metadata">Dataset metadata<a class="headerlink" href="#dataset-metadata" title="Permanent link">¤</a></h3>
+<p>Here we save the metadata associated with the generated points to disk.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">cymyc</span> <span class="kn">import</span> <span class="n">dataloading</span>
+<span class="kn">from</span> <span class="nn">cymyc.utils</span> <span class="kn">import</span> <span class="n">gen_utils</span> <span class="k">as</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">cymyc.approx.default_config</span> <span class="kn">import</span> <span class="n">config</span>
+
+<span class="k">class</span> <span class="nc">args</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># specify training config. For more options, see `src/approx/default_config`</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;X33_demo&#39;</span>
+    <span class="n">learning_rate</span> <span class="o">=</span> <span class="mf">1e-4</span>
+    <span class="n">n_epochs</span> <span class="o">=</span> <span class="mi">128</span>  <span class="c1"># change as necessary!</span>
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dpath</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">1024</span>
+    <span class="n">n_units</span> <span class="o">=</span> <span class="p">[</span><span class="mi">48</span><span class="p">,</span><span class="mi">48</span><span class="p">,</span><span class="mi">48</span><span class="p">,</span><span class="mi">48</span><span class="p">]</span>
+
+<span class="c1"># Override default arguments from config file with provided command line arguments</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">override_default_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">read_metadata</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>  <span class="c1"># load dataset metadata</span>
+
+<span class="n">np_rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">()</span>
+<span class="n">data_train</span><span class="p">,</span> <span class="n">data_val</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">psi</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">initialize_loaders_train</span><span class="p">(</span>
+    <span class="n">np_rng</span>      <span class="o">=</span> <span class="n">np_rng</span><span class="p">,</span>
+    <span class="n">data_path</span>   <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;dataset.npz&quot;</span><span class="p">),</span>
+    <span class="n">batch_size</span>  <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Saving config file to experiments/X33_demo/X33_demo_METADATA.pkl
+Dataset size: (400000, 12), kappa: 0.0393404
+Vol[g]: 0.0277778, Vol[Ω]: 0.7060880
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="ricci-flat-metric-optimisation">Ricci-flat metric optimisation<a class="headerlink" href="#ricci-flat-metric-optimisation" title="Permanent link">¤</a></h2>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">optax</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">from</span> <span class="nn">cymyc.approx</span> <span class="kn">import</span> <span class="n">models</span>
+<span class="kn">from</span> <span class="nn">cymyc.approx.train</span> <span class="kn">import</span> <span class="n">create_train_state</span><span class="p">,</span> <span class="n">train_step</span><span class="p">,</span> <span class="n">callback</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="model-construction">Model construction<a class="headerlink" href="#model-construction" title="Permanent link">¤</a></h3>
+<p>Here we construct a spectral neural network to approximate the Ricci-flat metric. This constructed as an <span class="arithmatex">\(\partial\overline{\partial}\)</span>-exact correction to the corresponding Kähler form of some reference metric, one which is easily computable <a href="https://iopscience.iop.org/article/10.1088/2632-2153/ac8e4e/meta">(Larfors et. al. (2022))</a>.
+$$ \tilde{\omega} = \omega_{\text{ref}} + \partial \overline{\partial} \phi~.$$
+Thus the task reduces to finding a globally defined function <span class="arithmatex">\(\phi \in C^{\infty}(X)\)</span> s.t. the metric corresponding to the approximating Kähler form <span class="arithmatex">\(\tilde{\omega}\)</span> satisfies the Ricci-flat condition, which says that the volume form induced by the metric coincides with the canonical volume form, up to a constant function,
+$$ \omega^n \propto \Omega \wedge \overline{\Omega} ~.$$
+This is a nonlinear PDE on <span class="arithmatex">\(X\)</span> for the function <span class="arithmatex">\(\phi\)</span> - we encode this condition into a variational objective, discretise this via a neural network ansatz, and optimise to obtain a parameterised function describing a approximately Ricci-flat <span class="arithmatex">\(\tilde{\omega}\)</span>. Note we are not using the Ricci curvature as the objective itself, as evaluation of third-order derivatives of a neural network is quite expensive - this is possible with our library though. </p>
+<p>In more detail, our ansatz consists of a projection of the input data <span class="arithmatex">\(p \in \mathbb{P}^n\)</span> into a <span class="arithmatex">\(\mathbb{C}^*\)</span>-invariant form, via the mapping <span class="arithmatex">\(\alpha_{n}\colon \mathbb{P}^{n}   \longrightarrow \mathbb{C}^{n+1,n+1}\)</span>,
+whose action on a general point <span class="arithmatex">\(p\in [Z_0\colon Z_1\colon \dots\colon Z_{n}]\in\mathbb{P}^{n}\)</span> is defined as:</p>
+<div class="arithmatex">\[\alpha_{n}(p) = \left[\begin{matrix}
+        \displaystyle \frac{Z_0 \overline{Z_0}}{|Z|^2} &amp;&amp; \displaystyle\frac{Z_0 \overline{Z_1}}{|Z|^2} &amp;&amp; \dots &amp;&amp; \displaystyle\frac{Z_0 \overline{Z_{n}}}{|Z|^2} \\
+        \displaystyle\frac{Z_1 \overline{Z_0}}{|Z|^2}  &amp;&amp; \displaystyle\frac{Z_1 \overline{Z_1}}{|Z|^2} &amp;&amp; \dots &amp;&amp; \displaystyle\frac{Z_1 \overline{Z_{n}}}{|Z|^2} \\
+        \vdots &amp;&amp; \vdots &amp;&amp; \ddots &amp;&amp; \vdots \\
+        \displaystyle \frac{Z_{n} \overline{Z_0}}{|Z|^2} &amp;&amp; \displaystyle\frac{Z_{n} \overline{Z_1}}{|Z|^2} &amp;&amp; \dots &amp;&amp; \displaystyle\frac{Z_{n} \overline{Z_{n}}}{|Z|^2}
+    \end{matrix}\right] ~.\]</div>
+<p>This is followed by the conversion to real coordinates and the application of a standard feedforward neural network as below - this ensures the overall function learnt is a well-defined function on the ambient projective space.</p>
+<p><img alt="spec_arch" src="../assets/spectral_arch.png" /></p>
+<p>Further note that,</p>
+<ul>
+<li>The default architecture we use in all our experiments is a four-layer net with 48 units each and results are empirically insensitive to the exact choice of architecture/hyperparameters.</li>
+<li>The spectral layer adapts to the size of the input - therefore a projective variety with a higher-dimensional description of local coordinates on the ambient space entails an architecture of higher complexity.</li>
+</ul>
+<p>Below we define the model and optimiser. </p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">key</span><span class="p">,</span> <span class="n">_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span>
+
+<span class="n">metric_model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">LearnedVector_spectral_nn_CICY</span><span class="p">(</span>
+    <span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">,</span> <span class="n">ambient</span><span class="o">=</span><span class="n">ambient</span><span class="p">,</span> <span class="n">n_units</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">n_units</span><span class="p">)</span>
+
+<span class="n">g_FS_fn</span><span class="p">,</span> <span class="n">g_correction_fn</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">helper_fns</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">)</span>
+<span class="n">metric_params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">create_train_state</span><span class="p">(</span><span class="n">_key</span><span class="p">,</span> <span class="n">metric_model</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">data_dim</span><span class="o">=</span><span class="n">dim</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+<span class="c1"># partial closure</span>
+<span class="n">metric_fn</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">ddbar_phi_model</span><span class="p">,</span> <span class="n">g_ref_fn</span><span class="o">=</span><span class="n">g_FS_fn</span><span class="p">,</span> <span class="n">g_correction_fn</span><span class="o">=</span><span class="n">g_correction_fn</span><span class="p">)</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">logger_setup</span><span class="p">(</span><span class="s1">&#39;X33_demo&#39;</span><span class="p">,</span> <span class="n">filepath</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">))</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">metric_model</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span><span class="n">init_rng</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span> <span class="o">*</span> <span class="mi">2</span><span class="p">])))</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling LearnedVector_spectral_nn.spectral_layer.
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:25:26 INFO - logger_setup: /home/jt796/github/cymyc/docs/examples
+14:25:26 INFO - &lt;module&gt;: 
+                     LearnedVector_spectral_nn_CICY Summary                     
+┏━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
+┃<span class="ansi-bold"> </span><span class="ansi-bold">path    </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">module          </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">inputs       </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">outputs    </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">params          </span><span class="ansi-bold"> </span>┃
+┡━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
+│          │ LearnedVector_s… │ float64[1,12] │ float64[]   │                  │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│ layers_0 │ Dense            │ float64[36]   │ float64[48] │ bias:            │
+│          │                  │               │             │ float32[48]      │
+│          │                  │               │             │ kernel:          │
+│          │                  │               │             │ float32[36,48]   │
+│          │                  │               │             │                  │
+│          │                  │               │             │ <span class="ansi-bold">1,776 </span><span class="ansi-bold">(7.1 KB)</span>   │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│ layers_1 │ Dense            │ float64[48]   │ float64[48] │ bias:            │
+│          │                  │               │             │ float32[48]      │
+│          │                  │               │             │ kernel:          │
+│          │                  │               │             │ float32[48,48]   │
+│          │                  │               │             │                  │
+│          │                  │               │             │ <span class="ansi-bold">2,352 </span><span class="ansi-bold">(9.4 KB)</span>   │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│ layers_2 │ Dense            │ float64[48]   │ float64[48] │ bias:            │
+│          │                  │               │             │ float32[48]      │
+│          │                  │               │             │ kernel:          │
+│          │                  │               │             │ float32[48,48]   │
+│          │                  │               │             │                  │
+│          │                  │               │             │ <span class="ansi-bold">2,352 </span><span class="ansi-bold">(9.4 KB)</span>   │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│ layers_3 │ Dense            │ float64[48]   │ float64[48] │ bias:            │
+│          │                  │               │             │ float32[48]      │
+│          │                  │               │             │ kernel:          │
+│          │                  │               │             │ float32[48,48]   │
+│          │                  │               │             │                  │
+│          │                  │               │             │ <span class="ansi-bold">2,352 </span><span class="ansi-bold">(9.4 KB)</span>   │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│ scalar   │ Dense            │ float64[48]   │ float64[1]  │ bias: float32[1] │
+│          │                  │               │             │ kernel:          │
+│          │                  │               │             │ float32[48,1]    │
+│          │                  │               │             │                  │
+│          │                  │               │             │ <span class="ansi-bold">49 </span><span class="ansi-bold">(196 B)</span>       │
+├──────────┼──────────────────┼───────────────┼─────────────┼──────────────────┤
+│<span class="ansi-bold"> </span><span class="ansi-bold">        </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">                </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">             </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">      Total</span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">8,881 </span><span class="ansi-bold">(35.5 KB)</span><span class="ansi-bold"> </span><span class="ansi-bold"> </span>│
+└──────────┴──────────────────┴───────────────┴─────────────┴──────────────────┘
+<span class="ansi-bold">                                                                                </span>
+<span class="ansi-bold">                       Total Parameters: 8,881 </span><span class="ansi-bold">(35.5 KB)</span><span class="ansi-bold">                        </span>
+
+
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling LearnedVector_spectral_nn.spectral_layer.
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="optimisation-loop">Optimisation loop<a class="headerlink" href="#optimisation-loop" title="Permanent link">¤</a></h3>
+<p>This is fairly standard - note Jax is more bare-metal than other libraries, so we write the looping logic ourselves. </p>
+<p><code>jit</code> compilation introduces a delay the first time the <code>train_step</code> function is called, but executes quickly when called subsequently. We pay an initial up-front cost for compilation of Python functions into a form efficiently executable by an accelerator, which will be repaid during the execution itself.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="n">eval_interval</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">storage</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s1">&#39;gpu&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="k">except</span><span class="p">:</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s1">&#39;cpu&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="k">with</span> <span class="n">jax</span><span class="o">.</span><span class="n">default_device</span><span class="p">(</span><span class="n">device</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running on </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">%</span> <span class="n">eval_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+            <span class="n">val_loader</span><span class="p">,</span> <span class="n">val_data</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">get_validation_data</span><span class="p">(</span><span class="n">val_loader</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">data_val</span><span class="p">,</span> <span class="n">np_rng</span><span class="p">)</span>
+            <span class="n">storage</span> <span class="o">=</span> <span class="n">callback</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">val_data</span><span class="p">,</span> <span class="n">metric_params</span><span class="p">,</span> <span class="n">metric_fn</span><span class="p">,</span> <span class="n">g_FS_fn</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">storage</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;VAL&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">&amp;</span><span class="n">gt</span><span class="p">;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">train_loader</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">data_loader</span><span class="p">(</span><span class="n">data_train</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">np_rng</span><span class="p">)</span>
+
+        <span class="n">train_loader_it</span> <span class="o">=</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">train_loader</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Epoch: </span><span class="si">{</span><span class="n">epoch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="n">data_train</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">//</span><span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                               <span class="n">colour</span><span class="o">=</span><span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="n">mininterval</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">train_loader_it</span><span class="p">):</span>
+            <span class="n">metric_params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">metric_params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">metric_fn</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">kappa</span><span class="p">)</span>
+            <span class="n">train_loader_it</span><span class="o">.</span><span class="n">set_postfix_str</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;loss: </span><span class="si">{</span><span class="n">loss</span><span class="si">:</span><span class="s2">.5f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">refresh</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># save parameters to disk</span>
+<span class="n">utils</span><span class="o">.</span><span class="n">basic_ckpt</span><span class="p">(</span><span class="n">metric_params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;FIN&#39;</span><span class="p">)</span>
+<span class="n">utils</span><span class="o">.</span><span class="n">save_logs</span><span class="p">(</span><span class="n">storage</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;FIN&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:25:26 INFO - &lt;module&gt;: Running on cuda:0
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling ddbar_phi_model
+Compiling phi_head
+Compiling LearnedVector_spectral_nn.spectral_layer.
+Compiling ricci_measure
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:26:18 INFO - callback: [51.7s]: [VAL] | Epoch: 0 | Iter: 0 | chi_form: -147.8624+0.0102j | det_g: 0.0018 | einstein_norm: 4.0715 | kahler_loss: 0.0000 | monge_ampere_loss: 0.2222 | ricci_measure: 0.1323 | ricci_scalar: -2.6378 | ricci_tensor_norm: 0.1802 | sigma_measure: 0.3148 | vol_CY: 0.0279 | vol_Omega: 0.7042 | vol_loss: 0.0001
+Epoch: 0:   0%|<span class="ansi-green-fg">                                                                                                                                                                                                                                       </span>| 0/390 [00:00&lt;?, ?it/s]</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling ddbar_phi_model
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>Epoch: 0: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:05&lt;00:00, 76.54it/s, loss: 0.09083]
+Epoch: 1: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 572.91it/s, loss: 0.06886]
+Epoch: 2: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 580.58it/s, loss: 0.04289]
+Epoch: 3: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 583.24it/s, loss: 0.02926]
+Epoch: 4: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 589.58it/s, loss: 0.02722]
+14:26:28 INFO - callback: [61.9s]: [VAL] | Epoch: 5 | Iter: 0 | chi_form: -149.3161-0.0202j | det_g: 0.0017 | einstein_norm: 1.2555 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0270 | ricci_measure: 0.0435 | ricci_scalar: -0.2172 | ricci_tensor_norm: 0.0606 | sigma_measure: 0.0381 | vol_CY: 0.0278 | vol_Omega: 0.7086 | vol_loss: 0.0000
+Epoch: 5: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 534.56it/s, loss: 0.02547]
+Epoch: 6: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 561.00it/s, loss: 0.02498]
+Epoch: 7: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 589.92it/s, loss: 0.02409]
+Epoch: 8: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 562.07it/s, loss: 0.02171]
+Epoch: 9: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 557.11it/s, loss: 0.02210]
+14:26:34 INFO - callback: [67.2s]: [VAL] | Epoch: 10 | Iter: 0 | chi_form: -146.9219+0.0199j | det_g: 0.0018 | einstein_norm: 1.1907 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0226 | ricci_measure: 0.0381 | ricci_scalar: 0.0463 | ricci_tensor_norm: 0.0576 | sigma_measure: 0.0321 | vol_CY: 0.0277 | vol_Omega: 0.7050 | vol_loss: 0.0000
+Epoch: 10: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 542.18it/s, loss: 0.02192]
+Epoch: 11: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 551.39it/s, loss: 0.02137]
+Epoch: 12: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 560.51it/s, loss: 0.01998]
+Epoch: 13: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 561.09it/s, loss: 0.02048]
+Epoch: 14: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 567.97it/s, loss: 0.01986]
+14:26:39 INFO - callback: [72.7s]: [VAL] | Epoch: 15 | Iter: 0 | chi_form: -143.9541+0.0050j | det_g: 0.0017 | einstein_norm: 1.1205 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0191 | ricci_measure: 0.0373 | ricci_scalar: 0.1093 | ricci_tensor_norm: 0.0530 | sigma_measure: 0.0270 | vol_CY: 0.0279 | vol_Omega: 0.7076 | vol_loss: 0.0001
+Epoch: 15: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 548.10it/s, loss: 0.01922]
+Epoch: 16: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 577.24it/s, loss: 0.01867]
+Epoch: 17: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 575.49it/s, loss: 0.01838]
+Epoch: 18: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 568.85it/s, loss: 0.01876]
+Epoch: 19: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 568.61it/s, loss: 0.01843]
+14:26:44 INFO - callback: [78.0s]: [VAL] | Epoch: 20 | Iter: 0 | chi_form: -145.8684+0.0103j | det_g: 0.0017 | einstein_norm: 1.0711 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0172 | ricci_measure: 0.0343 | ricci_scalar: -0.0931 | ricci_tensor_norm: 0.0502 | sigma_measure: 0.0245 | vol_CY: 0.0276 | vol_Omega: 0.7030 | vol_loss: 0.0001
+Epoch: 20: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 521.85it/s, loss: 0.01772]
+Epoch: 21: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 531.52it/s, loss: 0.01840]
+Epoch: 22: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 529.54it/s, loss: 0.01716]
+Epoch: 23: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.46it/s, loss: 0.01619]
+Epoch: 24: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 573.31it/s, loss: 0.01558]
+14:26:50 INFO - callback: [83.5s]: [VAL] | Epoch: 25 | Iter: 0 | chi_form: -141.6123-0.0002j | det_g: 0.0017 | einstein_norm: 1.1405 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0162 | ricci_measure: 0.0370 | ricci_scalar: -0.0062 | ricci_tensor_norm: 0.0506 | sigma_measure: 0.0229 | vol_CY: 0.0278 | vol_Omega: 0.7065 | vol_loss: 0.0000
+Epoch: 25: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 527.47it/s, loss: 0.01658]
+Epoch: 26: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 529.48it/s, loss: 0.01555]
+Epoch: 27: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 555.86it/s, loss: 0.01646]
+Epoch: 28: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 573.49it/s, loss: 0.01629]
+Epoch: 29: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 566.63it/s, loss: 0.01639]
+14:26:55 INFO - callback: [89.0s]: [VAL] | Epoch: 30 | Iter: 0 | chi_form: -136.6402-0.0538j | det_g: 0.0017 | einstein_norm: 1.0027 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0154 | ricci_measure: 0.0323 | ricci_scalar: 0.0722 | ricci_tensor_norm: 0.0476 | sigma_measure: 0.0218 | vol_CY: 0.0277 | vol_Omega: 0.7025 | vol_loss: 0.0001
+Epoch: 30: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 532.89it/s, loss: 0.01503]
+Epoch: 31: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 538.50it/s, loss: 0.01551]
+Epoch: 32: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 566.12it/s, loss: 0.01464]
+Epoch: 33: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 579.78it/s, loss: 0.01483]
+Epoch: 34: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 582.54it/s, loss: 0.01501]
+14:27:01 INFO - callback: [94.4s]: [VAL] | Epoch: 35 | Iter: 0 | chi_form: -153.3210+0.0054j | det_g: 0.0018 | einstein_norm: 1.1005 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0161 | ricci_measure: 0.0376 | ricci_scalar: -0.2312 | ricci_tensor_norm: 0.0474 | sigma_measure: 0.0227 | vol_CY: 0.0280 | vol_Omega: 0.7134 | vol_loss: 0.0002
+Epoch: 35: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 540.23it/s, loss: 0.01448]
+Epoch: 36: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 558.39it/s, loss: 0.01574]
+Epoch: 37: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 572.88it/s, loss: 0.01526]
+Epoch: 38: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 562.43it/s, loss: 0.01472]
+Epoch: 39: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 539.29it/s, loss: 0.01496]
+14:27:06 INFO - callback: [99.8s]: [VAL] | Epoch: 40 | Iter: 0 | chi_form: -146.8696-0.0111j | det_g: 0.0017 | einstein_norm: 1.0653 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0155 | ricci_measure: 0.0322 | ricci_scalar: 0.1571 | ricci_tensor_norm: 0.0465 | sigma_measure: 0.0218 | vol_CY: 0.0278 | vol_Omega: 0.7052 | vol_loss: 0.0000
+Epoch: 40: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 568.74it/s, loss: 0.01487]
+Epoch: 41: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 565.72it/s, loss: 0.01568]
+Epoch: 42: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 566.88it/s, loss: 0.01412]
+Epoch: 43: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 575.04it/s, loss: 0.01551]
+Epoch: 44: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 560.32it/s, loss: 0.01417]
+14:27:11 INFO - callback: [105.2s]: [VAL] | Epoch: 45 | Iter: 0 | chi_form: -153.1961+0.0116j | det_g: 0.0017 | einstein_norm: 1.0842 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0153 | ricci_measure: 0.0343 | ricci_scalar: -0.1280 | ricci_tensor_norm: 0.0449 | sigma_measure: 0.0218 | vol_CY: 0.0279 | vol_Omega: 0.7093 | vol_loss: 0.0001
+Epoch: 45: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 547.89it/s, loss: 0.01515]
+Epoch: 46: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 551.31it/s, loss: 0.01372]
+Epoch: 47: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 573.33it/s, loss: 0.01479]
+Epoch: 48: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 559.24it/s, loss: 0.01452]
+Epoch: 49: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 572.21it/s, loss: 0.01526]
+14:27:17 INFO - callback: [110.6s]: [VAL] | Epoch: 50 | Iter: 0 | chi_form: -132.6214+0.0156j | det_g: 0.0017 | einstein_norm: 0.9498 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0137 | ricci_measure: 0.0310 | ricci_scalar: 0.3576 | ricci_tensor_norm: 0.0425 | sigma_measure: 0.0192 | vol_CY: 0.0277 | vol_Omega: 0.7025 | vol_loss: 0.0001
+Epoch: 50: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 564.28it/s, loss: 0.01403]
+Epoch: 51: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 558.20it/s, loss: 0.01402]
+Epoch: 52: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 569.94it/s, loss: 0.01399]
+Epoch: 53: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 562.36it/s, loss: 0.01385]
+Epoch: 54: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 562.99it/s, loss: 0.01393]
+14:27:22 INFO - callback: [115.9s]: [VAL] | Epoch: 55 | Iter: 0 | chi_form: -141.8868+0.0201j | det_g: 0.0017 | einstein_norm: 1.0203 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0144 | ricci_measure: 0.0272 | ricci_scalar: 0.1503 | ricci_tensor_norm: 0.0422 | sigma_measure: 0.0203 | vol_CY: 0.0278 | vol_Omega: 0.7064 | vol_loss: 0.0000
+Epoch: 55: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 572.05it/s, loss: 0.01462]
+Epoch: 56: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 584.43it/s, loss: 0.01446]
+Epoch: 57: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 567.86it/s, loss: 0.01493]
+Epoch: 58: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 565.89it/s, loss: 0.01497]
+Epoch: 59: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 563.96it/s, loss: 0.01303]
+14:27:28 INFO - callback: [121.2s]: [VAL] | Epoch: 60 | Iter: 0 | chi_form: -142.2032+0.0036j | det_g: 0.0017 | einstein_norm: 0.9002 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0140 | ricci_measure: 0.0273 | ricci_scalar: 0.0055 | ricci_tensor_norm: 0.0406 | sigma_measure: 0.0198 | vol_CY: 0.0278 | vol_Omega: 0.7060 | vol_loss: 0.0000
+Epoch: 60: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 550.94it/s, loss: 0.01336]
+Epoch: 61: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 547.94it/s, loss: 0.01393]
+Epoch: 62: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 545.21it/s, loss: 0.01484]
+Epoch: 63: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 548.59it/s, loss: 0.01385]
+Epoch: 64: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 544.52it/s, loss: 0.01368]
+14:27:33 INFO - callback: [126.7s]: [VAL] | Epoch: 65 | Iter: 0 | chi_form: -150.3081+0.0003j | det_g: 0.0017 | einstein_norm: 0.9176 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0136 | ricci_measure: 0.0289 | ricci_scalar: -0.1310 | ricci_tensor_norm: 0.0419 | sigma_measure: 0.0195 | vol_CY: 0.0277 | vol_Omega: 0.7054 | vol_loss: 0.0001
+Epoch: 65: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 562.41it/s, loss: 0.01326]
+Epoch: 66: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 556.48it/s, loss: 0.01411]
+Epoch: 67: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.83it/s, loss: 0.01347]
+Epoch: 68: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 549.33it/s, loss: 0.01386]
+Epoch: 69: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 559.46it/s, loss: 0.01356]
+14:27:38 INFO - callback: [132.1s]: [VAL] | Epoch: 70 | Iter: 0 | chi_form: -133.0434-0.0148j | det_g: 0.0018 | einstein_norm: 1.0014 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0133 | ricci_measure: 0.0276 | ricci_scalar: 0.2083 | ricci_tensor_norm: 0.0416 | sigma_measure: 0.0187 | vol_CY: 0.0278 | vol_Omega: 0.7047 | vol_loss: 0.0000
+Epoch: 70: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 544.78it/s, loss: 0.01418]
+Epoch: 71: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 557.75it/s, loss: 0.01356]
+Epoch: 72: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 567.88it/s, loss: 0.01371]
+Epoch: 73: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 556.92it/s, loss: 0.01426]
+Epoch: 74: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 557.79it/s, loss: 0.01390]
+14:27:44 INFO - callback: [137.5s]: [VAL] | Epoch: 75 | Iter: 0 | chi_form: -144.0889+0.0023j | det_g: 0.0018 | einstein_norm: 0.9646 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0145 | ricci_measure: 0.0259 | ricci_scalar: -0.0402 | ricci_tensor_norm: 0.0418 | sigma_measure: 0.0207 | vol_CY: 0.0277 | vol_Omega: 0.7032 | vol_loss: 0.0001
+Epoch: 75: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 545.42it/s, loss: 0.01353]
+Epoch: 76: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 567.56it/s, loss: 0.01373]
+Epoch: 77: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 563.65it/s, loss: 0.01263]
+Epoch: 78: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 583.76it/s, loss: 0.01417]
+Epoch: 79: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 577.58it/s, loss: 0.01379]
+14:27:49 INFO - callback: [142.8s]: [VAL] | Epoch: 80 | Iter: 0 | chi_form: -147.1411-0.0089j | det_g: 0.0017 | einstein_norm: 1.0180 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0142 | ricci_measure: 0.0285 | ricci_scalar: 0.0157 | ricci_tensor_norm: 0.0419 | sigma_measure: 0.0200 | vol_CY: 0.0279 | vol_Omega: 0.7100 | vol_loss: 0.0001
+Epoch: 80: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 526.09it/s, loss: 0.01380]
+Epoch: 81: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 548.99it/s, loss: 0.01327]
+Epoch: 82: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 553.80it/s, loss: 0.01450]
+Epoch: 83: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 548.24it/s, loss: 0.01356]
+Epoch: 84: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 572.65it/s, loss: 0.01379]
+14:27:55 INFO - callback: [148.3s]: [VAL] | Epoch: 85 | Iter: 0 | chi_form: -138.4507+0.0099j | det_g: 0.0017 | einstein_norm: 0.9589 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0136 | ricci_measure: 0.0249 | ricci_scalar: 0.0912 | ricci_tensor_norm: 0.0414 | sigma_measure: 0.0193 | vol_CY: 0.0278 | vol_Omega: 0.7053 | vol_loss: 0.0000
+Epoch: 85: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 541.77it/s, loss: 0.01447]
+Epoch: 86: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 556.41it/s, loss: 0.01459]
+Epoch: 87: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 543.58it/s, loss: 0.01386]
+Epoch: 88: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 556.47it/s, loss: 0.01305]
+Epoch: 89: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 569.38it/s, loss: 0.01432]
+14:28:00 INFO - callback: [153.8s]: [VAL] | Epoch: 90 | Iter: 0 | chi_form: -146.9192-0.0090j | det_g: 0.0017 | einstein_norm: 0.9270 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0141 | ricci_measure: 0.0327 | ricci_scalar: -0.1549 | ricci_tensor_norm: 0.0407 | sigma_measure: 0.0203 | vol_CY: 0.0276 | vol_Omega: 0.7013 | vol_loss: 0.0002
+Epoch: 90: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 549.42it/s, loss: 0.01304]
+Epoch: 91: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 553.62it/s, loss: 0.01467]
+Epoch: 92: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 561.20it/s, loss: 0.01429]
+Epoch: 93: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 569.88it/s, loss: 0.01469]
+Epoch: 94: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 555.88it/s, loss: 0.01326]
+14:28:05 INFO - callback: [159.2s]: [VAL] | Epoch: 95 | Iter: 0 | chi_form: -134.2157+0.0087j | det_g: 0.0017 | einstein_norm: 0.8699 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0125 | ricci_measure: 0.0267 | ricci_scalar: 0.1765 | ricci_tensor_norm: 0.0394 | sigma_measure: 0.0178 | vol_CY: 0.0276 | vol_Omega: 0.6998 | vol_loss: 0.0002
+Epoch: 95: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 564.26it/s, loss: 0.01420]
+Epoch: 96: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 569.56it/s, loss: 0.01387]
+Epoch: 97: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 571.52it/s, loss: 0.01350]
+Epoch: 98: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 573.66it/s, loss: 0.01259]
+Epoch: 99: 100%|<span class="ansi-green-fg">████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 584.08it/s, loss: 0.01261]
+14:28:11 INFO - callback: [164.5s]: [VAL] | Epoch: 100 | Iter: 0 | chi_form: -145.4254+0.0072j | det_g: 0.0017 | einstein_norm: 0.9189 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0136 | ricci_measure: 0.0279 | ricci_scalar: -0.0306 | ricci_tensor_norm: 0.0406 | sigma_measure: 0.0193 | vol_CY: 0.0279 | vol_Omega: 0.7102 | vol_loss: 0.0001
+Epoch: 100: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 541.49it/s, loss: 0.01350]
+Epoch: 101: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 557.09it/s, loss: 0.01390]
+Epoch: 102: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 574.05it/s, loss: 0.01449]
+Epoch: 103: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 565.91it/s, loss: 0.01397]
+Epoch: 104: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 558.86it/s, loss: 0.01302]
+14:28:16 INFO - callback: [169.9s]: [VAL] | Epoch: 105 | Iter: 0 | chi_form: -149.9376-0.0439j | det_g: 0.0018 | einstein_norm: 1.0005 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0140 | ricci_measure: 0.0331 | ricci_scalar: 0.0176 | ricci_tensor_norm: 0.0409 | sigma_measure: 0.0199 | vol_CY: 0.0278 | vol_Omega: 0.7065 | vol_loss: 0.0000
+Epoch: 105: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 576.60it/s, loss: 0.01335]
+Epoch: 106: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 590.34it/s, loss: 0.01331]
+Epoch: 107: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 590.94it/s, loss: 0.01346]
+Epoch: 108: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 588.17it/s, loss: 0.01293]
+Epoch: 109: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 579.40it/s, loss: 0.01316]
+14:28:21 INFO - callback: [175.1s]: [VAL] | Epoch: 110 | Iter: 0 | chi_form: -138.6156+0.0104j | det_g: 0.0017 | einstein_norm: 1.0735 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0131 | ricci_measure: 0.0251 | ricci_scalar: 0.0507 | ricci_tensor_norm: 0.0405 | sigma_measure: 0.0185 | vol_CY: 0.0278 | vol_Omega: 0.7051 | vol_loss: 0.0000
+Epoch: 110: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 528.55it/s, loss: 0.01295]
+Epoch: 111: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 552.33it/s, loss: 0.01392]
+Epoch: 112: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 546.67it/s, loss: 0.01305]
+Epoch: 113: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 547.34it/s, loss: 0.01265]
+Epoch: 114: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 558.66it/s, loss: 0.01343]
+14:28:27 INFO - callback: [180.6s]: [VAL] | Epoch: 115 | Iter: 0 | chi_form: -143.7961+0.0100j | det_g: 0.0017 | einstein_norm: 0.9358 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0139 | ricci_measure: 0.0269 | ricci_scalar: 0.0594 | ricci_tensor_norm: 0.0403 | sigma_measure: 0.0196 | vol_CY: 0.0279 | vol_Omega: 0.7098 | vol_loss: 0.0001
+Epoch: 115: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 542.10it/s, loss: 0.01215]
+Epoch: 116: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.72it/s, loss: 0.01322]
+Epoch: 117: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 566.17it/s, loss: 0.01286]
+Epoch: 118: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.81it/s, loss: 0.01353]
+Epoch: 119: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 549.84it/s, loss: 0.01315]
+14:28:32 INFO - callback: [186.0s]: [VAL] | Epoch: 120 | Iter: 0 | chi_form: -141.6601-0.0063j | det_g: 0.0017 | einstein_norm: 0.8899 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0130 | ricci_measure: 0.0281 | ricci_scalar: 0.0299 | ricci_tensor_norm: 0.0384 | sigma_measure: 0.0183 | vol_CY: 0.0279 | vol_Omega: 0.7103 | vol_loss: 0.0002
+Epoch: 120: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 548.59it/s, loss: 0.01400]
+Epoch: 121: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 542.58it/s, loss: 0.01359]
+Epoch: 122: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 538.37it/s, loss: 0.01296]
+Epoch: 123: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 542.21it/s, loss: 0.01368]
+Epoch: 124: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 551.13it/s, loss: 0.01362]
+14:28:38 INFO - callback: [191.5s]: [VAL] | Epoch: 125 | Iter: 0 | chi_form: -145.2401-0.0202j | det_g: 0.0017 | einstein_norm: 0.8886 | kahler_loss: 0.0000 | monge_ampere_loss: 0.0130 | ricci_measure: 0.0244 | ricci_scalar: -0.0146 | ricci_tensor_norm: 0.0386 | sigma_measure: 0.0186 | vol_CY: 0.0276 | vol_Omega: 0.7028 | vol_loss: 0.0001
+Epoch: 125: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.48it/s, loss: 0.01296]
+Epoch: 126: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 559.61it/s, loss: 0.01254]
+Epoch: 127: 100%|<span class="ansi-green-fg">███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:00&lt;00:00, 554.74it/s, loss: 0.01302]
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="sanity-check">Sanity check<a class="headerlink" href="#sanity-check" title="Permanent link">¤</a></h2>
+<p>As a sanity check, we may verify that the resulting metric is approximately Ricci-flat by investigating the behaviour of the Ricci tensor <span class="arithmatex">\(\textsf{Ric}\)</span> and Ricci scalar <span class="arithmatex">\(R\)</span>, defined in terms of the Riemann curvature tensor <span class="arithmatex">\(\textsf{Riem} \in \Omega^2(X; \textsf{End}(T_X))\)</span>, respectively, over training:
+\begin{align<em>}
+\textsf{Ric}(X,Y) &amp;= \textsf{Tr}\left(Z \mapsto \textsf{Riem}(Z,X)Y\right), \quad X, Y \in \Gamma(T_X)~,\
+R &amp;= \textsf{Tr}(\textsf{Ric})~.
+\end{align</em>}</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">matplotlib.gridspec</span> <span class="kn">import</span> <span class="n">GridSpec</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;font.size&#39;</span><span class="p">:</span> <span class="mi">14</span><span class="p">})</span>
+<span class="c1"># remove if no local tex installation</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;text.usetex&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span> 
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;text.latex.preamble&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;\usepackage[cm]</span><span class="si">{sfmath}</span><span class="s1"> \usepackage</span><span class="si">{amssymb}</span><span class="s1"> \usepackage</span><span class="si">{mathrsfs}</span><span class="s1"> \usepackage</span><span class="si">{amsmath}</span><span class="s1">&#39;</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;font.sans-serif&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;cm&#39;</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span><span class="mi">7</span><span class="p">))</span>
+<span class="n">gs</span><span class="o">=</span><span class="n">GridSpec</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">=</span><span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">ax2</span><span class="o">=</span><span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+
+<span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">storage</span><span class="p">[</span><span class="s1">&#39;ricci_scalar&#39;</span><span class="p">])</span>
+<span class="n">n</span> <span class="o">=</span> <span class="mi">32</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">S</span><span class="p">))[:</span><span class="n">n</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">S</span><span class="p">)[:</span><span class="n">n</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="s1">&#39;royalblue&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Epochs/</span><span class="si">{</span><span class="n">eval_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$R$&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;both&#39;</span><span class="p">)</span>
+
+<span class="n">R</span> <span class="o">=</span> <span class="n">storage</span><span class="p">[</span><span class="s1">&#39;ricci_tensor_norm&#39;</span><span class="p">]</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">R</span><span class="p">))[:</span><span class="n">n</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">R</span><span class="p">)[:</span><span class="n">n</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="s1">&#39;royalblue&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Epochs/</span><span class="si">{</span><span class="n">eval_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$\Vert \textsf</span><span class="si">{Ric}</span><span class="s1"> \Vert_2$&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;both&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_png output_subarea">
+<img alt="No description has been provided for this image" src="data:image/png;base64,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"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Now that we have an approximation to the Ricci-flat metric on <span class="arithmatex">\(X\)</span>, we can use this to do geometry - e.g. measure lengths, areas, volumes, and study the spectrum of various differential operators. See the <code>harmonic_forms</code> example notebook, where we use the learnt metric to find the zero modes of the Laplacian on <span class="arithmatex">\(X\)</span>. </p>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var tab,labels=set.querySelector(".tabbed-labels");for(tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; 2024 <a href="https://github.com/justin-tan"  target="_blank" rel="noopener">Justin Tan</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "toc.integrate", "header.autohide", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.tabs.link", "content.code.annotation", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.fe8b6f2b.min.js"></script>
+      
+        <script src="../../_static/katex.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+      
+    
+  </body>
+</html>
