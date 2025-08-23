@@ -31,7 +31,7 @@ from collections import defaultdict
 
 
 class HYMLineBundle:
-    def __init__(self, key, cy: CICY, coefficients, metric_fn: RicciFlatMetric, tx: optax.GradientTransformation, 
+    def __init__(self, key, cy: CICY, coefficients, metric_fn, tx: optax.GradientTransformation, 
                  pb_fn, n_units: List[int] = [48, 48, 48, 48], name = None):
         self._cy = cy
         self._line_bundle = coefficients
