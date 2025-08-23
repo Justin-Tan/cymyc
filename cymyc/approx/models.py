@@ -53,10 +53,11 @@ from flax import linen as nn
 from functools import partial
 from typing import Callable, Sequence, Mapping
 from jaxtyping import Array, Float, Complex, ArrayLike
+from dataclasses import field
 
 # custom
 from .. import alg_geo, curvature, fubini_study
-from ..utils import math_utils, ops
+from ..utils import math_utils, ops, poly_utils
 
 class LearnedVector_spectral_nn(nn.Module):
     r"""
@@ -297,6 +298,34 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
             return coeffs
 
 
+class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
+    r"""
+    Generalisation of parent class to arbitrary holomorphic vector bundle. Returns coefficients
+    of sections of $H^1(X;V)$ to be used in numerical approx. of harmonic representatives.
+
+    Returns $\psi_{ai}$, where $a,b$ run over the relevant basis elements for each axis.
+    """
+    n_1: int = 1
+    n_2: int = 1
+
+    n_harmonic: int = 1
+    use_spectral_embedding: bool = True
+    complex_kernel: bool = True
+
+    def setup(self):
+        self.n_hidden = len(self.n_units)
+        self.dims = np.array(self.ambient) + 1  # coords for each ambient space factor
+
+        self.layers = [nn.Dense(f) for f in self.n_units]
+
+        self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
+        if self.common_ambient_space:
+            # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
+            self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                  self.n_1, self.n_2), "...i, ...ihab->...hab", 
+                                                  name='layers_coeffs', complex_kernel=self.complex_kernel)
+        else:
+            raise NotImplementedError
 
 @partial(jit, static_argnums=(2,3,4,5,6))
 def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int, 
@@ -406,6 +435,21 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
     return CoeffNetwork_spectral_nn_CICY(n_homo_coords, ambient, n_units, h_21=h_21,
             activation=activation).apply({'params': params}, p)
 
+
+@partial(jit, static_argnums=(2,3,4,5,6,7,8))
+def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
+                     ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1,
+                     complex_kernel=True,
+                     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
+    r"""Wrapper to feed parameters into forward pass for section coefficient network.
+    """
+    print(f'Compiling {coeff_head_holoV.__qualname__}')
+    # last layer is coeff_layer
+    print(sorted(params.keys()))
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if 'kernel' in params[k].keys()]
+
+    return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
+            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply({'params': params}, p)
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
