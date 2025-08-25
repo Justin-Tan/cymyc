@@ -47,12 +47,13 @@ def curvature_form_line(p, pullbacks, params, log_H_fn):
 
 @partial(jax.jit, static_argnums=(2,))
 def connection_form_V(p, pullbacks, H_fn, params=None):
-    H = H_fn(p)
-    H_inv = jnp.linalg.inv(H)  # \bar{a} b
     if params is None:
+        H = H_fn(p)
         del_H = curvature.del_z(p, H_fn)
     else:
-        del_H = curvature.del_z(p, H_fn, params)
+        H = H_fn(p, params)
+        del_H = curvature.del_z(p, H_fn, False, params)
+    H_inv = jnp.linalg.inv(H)  # \bar{a} b
     del_H = jnp.einsum("...abu,...iu->...abi", del_H, pullbacks)
     A = jnp.einsum("...bc, ...abi->...cai", H_inv, del_H)
     return A
@@ -88,30 +89,57 @@ def objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn
     # return ((w*(g_tr_F**2)).sum() / w.sum()) - (w*g_tr_F).sum()**2 / w.sum()**2
     return jnp.mean(w * (g_tr_F**2)) / vol_Omega - 1./d * jnp.mean(w * g_tr_F)**2 / vol_Omega**2
 
+@partial(jax.jit, static_argnums=(2,3,4))
+def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, d=1.):
+    """
+    Ref: (A7) https://arxiv.org/pdf/2110.12483 for d=1.
+    """
+    p, pbs, w = data
+    vol_Omega = jnp.mean(w)
+    g = vmap(metric_fn)(p)  # frozen params
+    F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+
+    g_tr_F = jnp.einsum("...ji,...abij->...ab", jnp.linalg.inv(g), F)  # trace over base indices
+    g_tr_F_sq = g_tr_F @ g_tr_F 
+    tr_g_tr_F = jnp.real(jnp.einsum("...aa->...", g_tr_F))  # trace over fibre indices
+    tr_g_tr_F_sq = jnp.real(jnp.einsum("...aa->...", g_tr_F_sq))  # trace over fibre indices
+
+    return jnp.mean(w * (tr_g_tr_F_sq)) / vol_Omega - 1./d * jnp.mean(w * tr_g_tr_F)**2 / vol_Omega**2
+
+@partial(jax.jit, static_argnums=(2,3))
 def trace_F(data, params, curvature_form_fn, metric_fn):
     p, pbs, w = data
     g = vmap(metric_fn)(p)  # frozen params
     F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
 
-    g_tr_F = -jnp.real(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))
+    g_tr_F = -jnp.real(jnp.einsum("B...ji,B...ij->B...", jnp.linalg.inv(g), F))
     return g_tr_F
 
-def loss_breakdown(data, params, curvature_form_fn, metric_fn, slope = None, d=1.):
+def loss_breakdown(data, params, curvature_form_fn, metric_fn, slope: float  = None, d: int = 1):
     if slope is not None:
         loss = objective_function(data, params, curvature_form_fn, metric_fn, slope, d)
     else:
-        loss = objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn)
+        if d > 1:
+            loss = objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, d)
+        else:
+            loss = objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn)
 
     p, pbs, w = data
     g_tr_F = trace_F(data, params, curvature_form_fn, metric_fn)
+    if d > 1: g_tr_F = vmap(jnp.trace)(g_tr_F)
     return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / jnp.mean(w)}
 
-@partial(jax.jit, static_argnums=(3,4,5,6))
-def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn, slope: float = None):
+@partial(jax.jit, static_argnums=(3,4,5,6,7))
+def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn, rank_V: int = 1, slope: float = None):
     if slope is not None:
         loss, grads = jax.value_and_grad(objective_function, argnums=1)(data, params, curvature_form_fn, metric_fn, slope)
     else:
-        loss, grads = jax.value_and_grad(objective_function_implicit_slope, argnums=1)(data, params, curvature_form_fn, metric_fn)
+        if rank_V > 1:
+            loss, grads = jax.value_and_grad(objective_function_implicit_slope_V, argnums=1)(data, params, 
+                curvature_form_fn, metric_fn, rank_V)
+        else:
+            loss, grads = jax.value_and_grad(objective_function_implicit_slope, argnums=1)(data, params, 
+                curvature_form_fn, metric_fn)
     param_updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, param_updates)
     return params, opt_state, loss

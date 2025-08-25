@@ -33,12 +33,12 @@ from collections import defaultdict
 
 class HarmonicBundle:
 
-    def __init__(self, monomials, coefficients, cy_dim, ambient, metric_fn, defining_polys=None):
+    def __init__(self, monomials, coefficients, cy_dim, ambient, defining_polys=None):
         
         self.ambient = ambient
         self.ambient_dim = sum(self.ambient)
         self.cy_dim = cy_dim
-        self.metric_fn = metric_fn
+        self._slope = None
 
         # specify monad data
         # make arguments later
@@ -76,7 +76,7 @@ class HarmonicBundle:
         if defining_polys is None:  # projective space
             self.monomial_basis = poly_utils.MonomialBasis(ambient, self.twisting_degree)
         else:
-            self.monomial_basis = poly_utils.MonomialBasisReduced(ambient, self.twisting_degree, defining_polys, psi)
+            self.monomial_basis = poly_utils.MonomialBasisReduced(ambient, self.twisting_degree, defining_polys)
 
         self.all_mono_eval_fn = jax.tree_util.Partial(poly_utils.monomial_evaluate_log, 
                                                       s_k=self.monomial_basis.power_matrix, 
@@ -263,14 +263,14 @@ class HarmonicBundle:
             n += B
         return kappa
 
-    def connection_form(self, p, params):
-        pb = self.pb_fn(math_utils.to_complex(p))
+    def connection_form(self, p, pb, params):
+        # pb = self.pb_fn(math_utils.to_complex(p))
         A = hym.connection_form_V(p, pb, self.section_metric_network, params)
         return A
 
     @partial(jax.jit, static_argnums=(0,))
-    def curvature_form(self, p, params):
-        pb = self.pb_fn(math_utils.to_complex(p))
+    def curvature_form(self, p, pb, params):
+        # pb = self.pb_fn(math_utils.to_complex(p))
         F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
         return F
 
@@ -328,25 +328,50 @@ class HarmonicBundle:
     
             # Basis of twisted one-forms in ambient P^1 x ... x P^n
             Z_i = p_c_ambient_i  # coords on the i-th ambient space
-            Z_norm_sq_i = jnp.sum(jnp.abs(Z_i)**2)
             _V_section = self.section_basis(math_utils.to_real(Z_i))  # [rank_V, dim]
             _V_dual_section = jnp.einsum("...ab, ...ib->...ia", H_fs, jnp.conjugate(_V_section))
             sym1 = jnp.einsum("...ia, ...jb->...ijab", _V_dual_section, jnp.conjugate(_V_dual_section))
             sym2 = jnp.einsum("...ia, ...jb->...jiab", _V_dual_section, jnp.conjugate(_V_dual_section))
-            matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.logaddexp(jnp.squeeze(coeffs[i]), 0), 
+            #matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.logaddexp(jnp.squeeze(coeffs[i]), 0), 
+            #                           0.5 * (sym1 + sym2))
+            matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.squeeze(coeffs[i]), 
                                        0.5 * (sym1 + sym2))
             sym_2B_section += matrix_update
     
         metric_ansatz = H_fs + sym_2B_section
         return jnp.einsum("...ab, ...ia, ...jb->...ij", metric_ansatz, _V_section, 
                           jnp.conjugate(_V_section))
+
+    def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
+        
+        loss_breakdown_dict = hym.loss_breakdown(
+            val_data, params, self.curvature_form, self._metric_fn, d = self.rank_V, slope = slope)
+        loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
+        summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
+
+        mode = 'VAL'
+        logs = [f"{k}: {v:.4f}" for (k,v) in summary.items()]        
+        logger.info(f"[{time.time()-t0:.1f}s]: [{mode}] | Epoch: {epoch}" + ''.join([f" | {log}" for log in logs]))
+
+        [storage[k].append(v) for (k,v) in summary.items()]
+        utils.save_logs(storage, self.name, epoch)
+        return storage
+
     
-    def fit(self, data_path, epochs: int = 24, batch_size: int = 128, lr: float = 1e-4,
-            shuffle_rng = np.random.default_rng()):
+    def fit(self, metric_fn, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
+            shuffle_rng = np.random.default_rng(), name=None):
+        from datetime import datetime
+
+        self._metric_fn = metric_fn
+        self.name = f"HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
+        self.eval_interval = 1  # epochs
+        self.save_interval = 8
+        self.eval_interval_t = 512  # iterations
 
         storage = defaultdict(list)
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
+        os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
         # cmd_args.metadata_path = os.path.join(cmd_args.dataset, 'metadata.pkl')
 
         A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
@@ -367,8 +392,14 @@ class HarmonicBundle:
         key = jax.random.key(42)
         key, _k = jax.random.split(key)
 
-        _tx = optax.adamw(lr)
-        self.n_units_harmonic = [48, 48, 48, 48]
+        # _tx = optax.adamw(lr)
+
+        grad_threshold = 10.
+        _tx = optax.chain(
+          optax.clip(grad_threshold),
+          optax.adamw(learning_rate=lr),
+        )
+        self.n_units_harmonic = [48,48,48,48] #[48, 64, 64, 64, 48]
         model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.rank_V,
                                            n_2=self.rank_V, n_harmonic=1, activation=nn.gelu)
@@ -383,7 +414,7 @@ class HarmonicBundle:
                 if epoch % self.eval_interval == 0: 
                     val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
                     p, w, _ = val_data
-                    pb = vmap(self._pb_fn)(math_utils.to_complex(p))
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     val_data = (p, pb, w)
                     storage = self.callback(
                         val_data, _params, storage, logger, epoch, t0, self._slope)
@@ -391,22 +422,28 @@ class HarmonicBundle:
                 if epoch > 0: 
                     train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
 
-                wrapped_train_loader = tqdm.tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
+                wrapped_train_loader = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
                                             colour='green', mininterval=0.1)
 
                 global_step = 0
                 for t, data in enumerate(wrapped_train_loader):
                     p, w, _ = data
-                    pb = vmap(self._pb_fn)(math_utils.to_complex(p))
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     data = (p, pb, w)
 
                     _params, _opt_state, loss = hym.train_step(
-                        data, _params, _opt_state, _tx, self.curvature_form, self._metric_fn, 
-                        self._slope)
+                        data, _params, _opt_state, _tx, self.curvature_form, self._metric_fn,
+                        self.rank_V, self._slope)
                     wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
 
                     if t % self.eval_interval_t == 0:
                         storage["train_loss"].append(loss)
                     # global_step += 1
                     # if global_step > 20: break
-        return storage
+
+            if epoch % self.save_interval == 0:
+                utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
+
+        utils.basic_ckpt(_params, _opt_state, self.name, 'FIN')
+        utils.save_logs(storage, self.name, 'FIN')
+        return _params, storage

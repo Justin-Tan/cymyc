@@ -164,7 +164,7 @@ if __name__ == "__main__":
     det_g_FS_fn = fubini_study.det_fubini_study_pb
 
     from tqdm import tqdm
-    max_batch_size = (n_p + v_p) // 32
+    max_batch_size = (n_p + v_p) // 64
     B = max_batch_size
     data_batched = dataloading._online_batch(p, n_p + v_p, B)
     weights, pullbacks, dVol_Omegas = [], [], []

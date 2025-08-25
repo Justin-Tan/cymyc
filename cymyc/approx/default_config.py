@@ -35,7 +35,7 @@ class config(object):
     cdtype = np.complex64
     periodic_eval = False
 
-    n_units_harmonic = [64, 64, 128, 64]  #, 42]
+    n_units_harmonic = [64,64,64,64] 
 
     # These need to correspond to the manifold you wish to examine,
     # see `examples/poly_spec` for conventions
