@@ -120,12 +120,16 @@ def trace_F(data, params, curvature_form_fn, metric_fn):
     g_tr_F = -jnp.real(jnp.einsum("B...ji,B...ij->B...", jnp.linalg.inv(g), F))
     return g_tr_F
 
-def loss_breakdown(data, params, curvature_form_fn, metric_fn, slope: float  = None, d: int = 1):
+def loss_breakdown(data, params, curvature_form_fn, metric_fn, bundle_metric_fn = None, 
+                   slope: float  = None, d: int = 1):
     if slope is not None:
         loss = objective_function(data, params, curvature_form_fn, metric_fn, slope, d)
     else:
         if d > 1:
-            loss = objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, d)
+            loss = objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, 
+                                                       bundle_metric_fn, d)
+            if bundle_metric_fn is not None:
+                H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
         else:
             loss = objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn)
 
@@ -137,7 +141,7 @@ def loss_breakdown(data, params, curvature_form_fn, metric_fn, slope: float  = N
     if d > 1: g_tr_F = vmap(jnp.trace)(g_tr_F)
 
     return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
-            'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega}
+            'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega}
 
 @partial(jax.jit, static_argnums=(3,4,5,6,7))
 def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn, rank_V: int = 1, slope: float = None):

@@ -378,7 +378,7 @@ class HarmonicBundle:
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
                                          self.N_sb, self.n_harmonic, complex_kernel=True, activation=activation)
         coeffs = jnp.squeeze(coeffs[0])
-        sym_2V_section = jnp.zeros((self.rank_V, self.rank_V), dtype=self.cdtype)
+        # sym_2V_section = jnp.zeros((self.rank_V, self.rank_V), dtype=self.cdtype)
         
         # Basis of V-sections in ambient P^1 x ... x P^n
         sv = self.section_basis_V(p)  # [rank_V, dim]
@@ -411,7 +411,8 @@ class HarmonicBundle:
     def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
         
         loss_breakdown_dict = hym.loss_breakdown(
-            val_data, params, self.curvature_form, self._metric_fn, d = self.rank_V, slope = slope)
+            val_data, params, self.curvature_form, self._metric_fn, self.section_metric_network, 
+            d = self.rank_V, slope = slope)
         loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
         summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
 
