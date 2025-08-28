@@ -45,18 +45,23 @@ class HarmonicBundle:
         # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         self.family_ids = [2,6,8,22,40,42,45,49]
 
-        self.n_harmonic = len(self.family_ids)
+        # self.n_harmonic = len(self.family_ids)
+        self.n_harmonic = 1
         self.rank_V = 3
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
         self.rank_B = len(self.line_bundle_B)
+        self.N_sb = 20  # number of sections of $E$
         self.line_bundle_C = (4,)
+        self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
+        self.degrees = ambient + 1
+        self.n_inhomo_coords = sum(self.degrees) - len(self.degrees)
         dQdz_info = alg_geo.dQdz_poly(self.n_homo_coords, monomials, coefficients)
         self.dQdz_monomials, self.dQdz_coeffs = dQdz_info
         self.fs_metric_fn = jax.tree_util.Partial(fubini_study.fubini_study_metric_homo_pb, 
@@ -177,15 +182,24 @@ class HarmonicBundle:
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
         return jnp.sum(f_p * s_B)
         
-    def embedding_matrix(self, p, cdtype=np.complex64):
+    def embedding_matrix(self, p):
         r"""
-        Describes the embedding $\iota: V \righthookarrow B$.
+        Describes embedding $\iota: V \righthookarrow B$.
         """
         patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        proj = jnp.eye(self.rank_V, dtype=cdtype)
+        proj = jnp.eye(self.rank_V, dtype=self.cdtype)
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
         col = -f_p / f_p[patch_idx]
         col = jnp.delete(col, patch_idx, assume_unique_indices=True)
+        return jnp.insert(proj, patch_idx, col, axis=-1)
+
+    def projection_matrix(self, p):
+        r"""
+        Inverse of embedding $\iota: V \righthookarrow B$.
+        """
+        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        proj = jnp.eye(self.rank_V, dtype=self.cdtype)
+        col = jnp.zeros(self.rank_V, dtype=self.cdtype)
         return jnp.insert(proj, patch_idx, col, axis=-1)
 
     def section_basis(self, p):
@@ -193,8 +207,15 @@ class HarmonicBundle:
         Section basis described in ambient coordinates, expressed in a local
         frame $Z_i$ on $U_i$. 
         """
-        _sections = self.embedding_matrix(p)
-        return _sections
+        # return self.embedding_matrix(p)
+        p_c = math_utils.to_complex(p)
+        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+
+        proj = jnp.eye(self.rank_V, dtype=self.cdtype)
+        f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
+        col = -f_p / f_p[patch_idx]
+        col = jnp.delete(col, patch_idx, assume_unique_indices=True)
+        return jnp.insert(proj, patch_idx, col, axis=-1) * p_c[patch_idx]
           
     
     def twisted_section_basis(self, p, cdtype=np.complex64):
@@ -270,9 +291,32 @@ class HarmonicBundle:
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_form(self, p, pb, params):
-        # pb = self.pb_fn(math_utils.to_complex(p))
+        return self.curvature_correction(p, pb, params)
         F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
         return F
+
+    def endomorphism_section(self, p, params):
+        H = self.section_metric_network(p, params)
+        H_0 = self.fubini_study_metric_V(p)
+        h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
+        return h  # h^b_a 
+
+    @partial(jax.jit, static_argnums=(0,))
+    def curvature_correction(self, p, pb, params):
+        F_0 = hym.curvature_form_V(p, pb, self.fubini_study_metric_V)
+        d_correction = curvature.del_bar_z(p, self.exact_piece, False, pb, params)
+        d_correction = jnp.einsum("...abiu, ...ju->...abij", d_correction, jnp.conjugate(pb))
+        return F_0 + d_correction
+
+    def exact_piece(self, p, pb, params):
+        h = self.endomorphism_section(p, params)
+        dh = curvature.del_z(p, self.endomorphism_section, False, params)
+        dh = jnp.einsum("...bai, ...ui->...bau", dh, pb)
+        A_0 = hym.connection_form_V(p, pb, self.fubini_study_metric_V)
+        _A1 = jnp.einsum("...ca, ...bci->...bai", h, A_0)
+        _A2 = jnp.einsum("...bc, ...cai->...bai", h, A_0)
+        return dh + _A1 - _A2
+
 
     def section_network_VOk(self, p, params, activation=nn.gelu):
         r"""
@@ -308,39 +352,61 @@ class HarmonicBundle:
     
         return V_section  # don't squeeze
 
+    def section_basis_V(self, p):
+        r"""
+        Smooth basis of sections of $V$ expressed in a local frame - typically Z_i^k. 
+        """
+        p_c = math_utils.to_complex(p)
+        linear_monomials = poly_utils.monomial_evaluate_log(p, self.mb1)
+        blocks = [linear_monomials] * self.rank_B
+        # rank(B) \times (\dim A_k \times rank(B))
+        section_matrix = jax.scipy.linalg.block_diag(*blocks)
+        embedding_matrix = self.embedding_matrix(p)
+
+        return embedding_matrix @ section_matrix
+
     def section_metric_network(self, p, params, activation=nn.gelu):
         r"""
         Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
         """
+        C = 10.
         p_c = math_utils.to_complex(p)
-        H_fs = self.fubini_study_metric_B(p)
+        H_fs_V = self.fubini_study_metric_V(p)
         
         # (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
         # TODO
-        coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.rank_V, 
-                                         self.rank_V, 1, complex_kernel=False, activation=activation)
-        sym_2B_section = jnp.empty((self.rank_B, self.rank_B), dtype=self.cdtype)
+        coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
+                                         self.N_sb, self.n_harmonic, complex_kernel=True, activation=activation)
+        coeffs = jnp.squeeze(coeffs[0])
+        sym_2V_section = jnp.zeros((self.rank_V, self.rank_V), dtype=self.cdtype)
         
-        for i in range(len(self.ambient)):
-            s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
-            n_c = e-s
-            p_c_ambient_i = jax.lax.dynamic_slice(p_c, (s,), (n_c,))
-    
-            # Basis of twisted one-forms in ambient P^1 x ... x P^n
-            Z_i = p_c_ambient_i  # coords on the i-th ambient space
-            _V_section = self.section_basis(math_utils.to_real(Z_i))  # [rank_V, dim]
-            _V_dual_section = jnp.einsum("...ab, ...ib->...ia", H_fs, jnp.conjugate(_V_section))
-            sym1 = jnp.einsum("...ia, ...jb->...ijab", _V_dual_section, jnp.conjugate(_V_dual_section))
-            sym2 = jnp.einsum("...ia, ...jb->...jiab", _V_dual_section, jnp.conjugate(_V_dual_section))
+        # Basis of V-sections in ambient P^1 x ... x P^n
+        sv = self.section_basis_V(p)  # [rank_V, dim]
+        dual_sv = jnp.einsum("...ab, ...bi->...ai", H_fs_V, jnp.conjugate(sv))
+        sv_outer_sv = jnp.einsum("...ai, ...bj->...ijab", dual_sv, jnp.conjugate(dual_sv))
+        
+        sym_update = jnp.einsum("...ij, ...ijab->...ab", coeffs, sv_outer_sv)
+        sym_update = sym_update + jnp.einsum("...ab->...ba", jnp.conjugate(sym_update))
+        
+        return H_fs_V + C * sym_update
+
+        # for i in range(len(self.ambient)):
+        for i in range(coeffs.shape[0]):
             #matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.logaddexp(jnp.squeeze(coeffs[i]), 0), 
             #                           0.5 * (sym1 + sym2))
-            matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.squeeze(coeffs[i]), 
+            matrix_update_i = jnp.einsum("...ij, ...ijab->...ab", jnp.squeeze(coeffs[i]), 
                                        0.5 * (sym1 + sym2))
-            sym_2B_section += matrix_update
+            sym_2B_section = sym_2B_section + C * matrix_update_i
+            # sym_2B_section += matrix_update
     
-        metric_ansatz = H_fs + sym_2B_section
-        return jnp.einsum("...ab, ...ia, ...jb->...ij", metric_ansatz, _V_section, 
-                          jnp.conjugate(_V_section))
+        # return sym_2B_section
+        proj_B2V = self.projection_matrix(p)
+        sym_2V_section = jnp.einsum("...ab, ...ia, ...jb->...ij", sym_2B_section, proj_B2V, proj_B2V)
+        return sym_2V_section
+        # metric_ansatz = H_fs + sym_2B_section
+        metric_ansatz = self.fubini_study_metric_V(p) + sym_2V_section
+        return metric_ansatz
+
 
     def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
         
@@ -394,15 +460,16 @@ class HarmonicBundle:
 
         # _tx = optax.adamw(lr)
 
-        grad_threshold = 10.
+        grad_threshold = 1.
         _tx = optax.chain(
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
         self.n_units_harmonic = [48,48,48,48] #[48, 64, 64, 64, 48]
         model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.rank_V,
-                                           n_2=self.rank_V, n_harmonic=1, activation=nn.gelu)
+        bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
+                                          n_2=self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
+                                          activation=nn.gelu)
         _params, _opt_state, _ = create_train_state(
             _k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
 
@@ -441,8 +508,8 @@ class HarmonicBundle:
                     # global_step += 1
                     # if global_step > 20: break
 
-            if epoch % self.save_interval == 0:
-                utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
+                if epoch % self.save_interval == 0:
+                    utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
 
         utils.basic_ckpt(_params, _opt_state, self.name, 'FIN')
         utils.save_logs(storage, self.name, 'FIN')

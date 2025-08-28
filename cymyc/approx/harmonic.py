@@ -946,7 +946,7 @@ class HarmonicFull(Harmonic):
         current_patch_mask = jnp.logical_not(self._idx_to_mask(patch_idx))
 
         if (self.n_hyper == 1) and (self.n_ambient == 1):
-            other_patches = utils._generate_all_patches(self.n_homo_coords, self._transitions, self.degrees)
+            other_patches = utils._generate_all_patches(self.n_homo_coords, self.n_transitions, self.degrees)
             other_patches = other_patches[elim_idx]  # patches with elim_idx removed.
         else:  # need to generalize to product of projective spaces
             other_patches = self.get_different_patches(elim_idx, patch_idx)
