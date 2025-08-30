@@ -211,6 +211,8 @@ if __name__ == "__main__":
     topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
     print('Wall data', topological_data)
     print(f"Volume: {vol}, Volume at chosen Kahler moduli: {canonical_vol}")
+    print(f"Vol_g from numerical integration: {vol_g}")
+    print(f"Vol_Omega from numerical integration: {vol_Omega}")
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)

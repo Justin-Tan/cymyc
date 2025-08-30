@@ -64,6 +64,12 @@ def curvature_form_V(p, pullbacks, H_fn, params=None):
     F = jnp.einsum("...abiu, ...ju->...abij", F, jnp.conjugate(pullbacks))
     return F
 
+@partial(jax.jit, static_argnums=(2,))
+def _curvature_form_V(p, pullbacks, H_fn):
+    F = curvature.del_bar_z(p, connection_form_V, False, pullbacks, H_fn)
+    F = jnp.einsum("...abiu, ...ju->...abij", F, jnp.conjugate(pullbacks))
+    return F
+
 @partial(jax.jit, static_argnums=(2,3,4))
 def objective_function(data, params, curvature_form_fn, metric_fn, slope: float):
     p, pbs, w = data
@@ -90,20 +96,27 @@ def objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn
     return jnp.mean(w * (g_tr_F**2)) / vol_Omega - 1./d * jnp.mean(w * g_tr_F)**2 / vol_Omega**2
 
 @partial(jax.jit, static_argnums=(2,3,4))
-def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, d=1.):
+def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, 
+        bundle_metric_fn, d=1.):
     """
     Ref: (A7) https://arxiv.org/pdf/2110.12483 for d=1.
     """
     p, pbs, w = data
     vol_Omega = jnp.mean(w)
     g = vmap(metric_fn)(p)  # frozen params
+    g_inv = jnp.linalg.inv(g)
+    H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
     F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
+    F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
+    F_sq = F_sq / jnp.mean(F_sq)
+    #return jnp.mean(w * jnp.abs(F_sq)) / vol_Omega
 
     g_tr_F = jnp.einsum("...ji,...abij->...ab", jnp.linalg.inv(g), F)  # trace over base indices
     det_F_g = jnp.abs(jnp.linalg.det(g_tr_F))
     #return jnp.mean(w * det_F_g) / vol_Omega
-    #max_eig = vmap(jnp.linalg.norm)(g_tr_F)
-    #return jnp.mean(w * max_eig) / vol_Omega
+    # max_eig = vmap(jnp.linalg.norm)(g_tr_F)
+    # return jnp.mean(w * max_eig) / vol_Omega
 
     g_tr_F_sq = g_tr_F @ g_tr_F 
     tr_g_tr_F = jnp.real(jnp.einsum("...aa->...", g_tr_F))  # trace over fibre indices
@@ -127,13 +140,13 @@ def loss_breakdown(data, params, curvature_form_fn, metric_fn, bundle_metric_fn 
     else:
         if d > 1:
             loss = objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, 
-                                                       bundle_metric_fn, d)
-            if bundle_metric_fn is not None:
-                H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
+                    bundle_metric_fn, d)
         else:
             loss = objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn)
 
     p, pbs, w = data
+    if bundle_metric_fn is not None:
+        H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
     g_tr_F = trace_F(data, params, curvature_form_fn, metric_fn)
     det_g_tr_F = jnp.linalg.det(g_tr_F)
     max_eig = vmap(jnp.linalg.norm)(g_tr_F)
@@ -143,17 +156,25 @@ def loss_breakdown(data, params, curvature_form_fn, metric_fn, bundle_metric_fn 
     return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
             'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega}
 
-@partial(jax.jit, static_argnums=(3,4,5,6,7))
-def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn, rank_V: int = 1, slope: float = None):
+@partial(jax.jit, static_argnums=(3,4,5,6,7,8))
+def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn, bundle_metric_fn, 
+        rank_V: int = 1, slope: float = None):
     if slope is not None:
         loss, grads = jax.value_and_grad(objective_function, argnums=1)(data, params, curvature_form_fn, metric_fn, slope)
     else:
         if rank_V > 1:
             loss, grads = jax.value_and_grad(objective_function_implicit_slope_V, argnums=1)(data, params, 
-                curvature_form_fn, metric_fn, rank_V)
+                curvature_form_fn, metric_fn, bundle_metric_fn, rank_V)
         else:
             loss, grads = jax.value_and_grad(objective_function_implicit_slope, argnums=1)(data, params, 
                 curvature_form_fn, metric_fn)
+    param_updates, opt_state = optimizer.update(grads, opt_state, params)
+    params = optax.apply_updates(params, param_updates)
+    return params, opt_state, loss
+
+@partial(jax.jit, static_argnums=(3,4,))
+def _train_step(data, params, opt_state, optimizer, objective_fn):
+    loss, grads = jax.value_and_grad(objective_fn, argnums=1)(data, params)
     param_updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, param_updates)
     return params, opt_state, loss
