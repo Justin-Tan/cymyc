@@ -445,10 +445,10 @@ class HarmonicBundle:
 		p_c = math_utils.to_complex(p)
 		H_fs_V = self.fubini_study_metric_V(p)
 		
-		# (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
 		# TODO
+		aux = self.section_basis_V(p).reshape(-1)
 		coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-										 k * self.N_sb, self.n_harmonic, complex_kernel=True, activation=activation)
+										 k * self.N_sb, aux, self.n_harmonic, complex_kernel=True, activation=activation)
 		coeffs = jnp.squeeze(coeffs[0])
 		h = coeffs @ jnp.conjugate(jnp.einsum("...ij->...ji", coeffs))
 		return h

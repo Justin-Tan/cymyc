@@ -326,6 +326,53 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
                                                   name='layers_coeffs', complex_kernel=self.complex_kernel)
         else:
             raise NotImplementedError
+        
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"], aux: Float[Array, "j"] = None) -> Array:
+        """Forward pass for coefficients, modelled as vector-valued functions on $X$. 
+
+        Parameters
+        ----------
+        x : Float[Array, "i"]
+            Input array of homogeneous coordinates, local coordinates for each
+            projective space factor are listed consecutively in the input array.
+        aux: Float[Array, "j"]
+            Auxiliary input array to be concatenated with spectral embedding.
+
+        Returns
+        -------
+        Complex[Array, "n_out"]
+            Output of vector-valued function.
+        """      
+        # Coefficients and basis
+        spectral_out = []
+        x = math_utils.to_complex(jnp.squeeze(x))
+
+        for i in range(len(self.ambient)):
+            s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+            p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+            spectral_out.append(self.spectral_layer(math_utils.to_real(p_ambient_i), self.dims[i]))
+
+        # Concatenate spectral output with auxiliary input
+        if aux is not None:
+            _x = jnp.concatenate(spectral_out + [aux], axis=-1)
+        else:
+            _x = jnp.concatenate(spectral_out, axis=-1)
+        _x = jnp.squeeze(_x.reshape(-1))
+
+        for i, layer in enumerate(self.layers):
+            _x = layer(_x)
+            if i != self.n_hidden - 1:
+                _x = self.activation(_x)
+
+        if self.common_ambient_space:
+            coeffs = self.coeff_layer(_x)  # [..., n_A * n_harmonic, n_1, n_2]
+            print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
+            return jnp.split(coeffs, len(self.ambient), axis=0)
+        else:
+            coeffs = [coeff_layer(_x) for coeff_layer in self.coeff_layers]
+            print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
+            return coeffs
 
 @partial(jit, static_argnums=(2,3,4,5,6))
 def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int, 
@@ -438,8 +485,8 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
 
 @partial(jit, static_argnums=(2,3,4,5,6,7,8))
 def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
-                     ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1,
-                     complex_kernel=True,
+                     ambient: Sequence[int], n_1: int, n_2: int, aux: Float[Array, "i"] = None, 
+                     n_harmonic: int = 1, complex_kernel=True,
                      activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
@@ -448,8 +495,9 @@ def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_c
     print(sorted(params.keys()))
     n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if 'kernel' in params[k].keys()]
 
+    variables = {'params': params}
     return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
-            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply({'params': params}, p)
+            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply(variables, p, aux)
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
