@@ -355,7 +355,7 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
 
         # Concatenate spectral output with auxiliary input
         if aux is not None:
-            _x = jnp.concatenate(spectral_out + [aux], axis=-1)
+            _x = jnp.concatenate(spectral_out + [jnp.squeeze(aux)], axis=-1)
         else:
             _x = jnp.concatenate(spectral_out, axis=-1)
         _x = jnp.squeeze(_x.reshape(-1))
@@ -483,7 +483,7 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
             activation=activation).apply({'params': params}, p)
 
 
-@partial(jit, static_argnums=(2,3,4,5,6,7,8))
+@partial(jit, static_argnums=(2,3,4,5,7,8,9))
 def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
                      ambient: Sequence[int], n_1: int, n_2: int, aux: Float[Array, "i"] = None, 
                      n_harmonic: int = 1, complex_kernel=True,
@@ -497,7 +497,7 @@ def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_c
 
     variables = {'params': params}
     return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
-            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply(variables, p, aux)
+            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply(variables, p)#, aux)
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
