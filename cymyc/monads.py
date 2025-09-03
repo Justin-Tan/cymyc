@@ -52,7 +52,7 @@ class HarmonicBundle:
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
         self.rank_B = len(self.line_bundle_B)
-        self.N_sb = 3  # number of sections of $E$
+        self.N_sb = 5  # number of sections of $E$
         self.line_bundle_C = (4,)
         self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
@@ -133,6 +133,9 @@ class HarmonicBundle:
         ddbar_f = 0.25 * jnp.squeeze((d2f_dx2 + d2f_dy2) -  1.j * (d2f_dxdy - d2f_dydx))
         return ddbar_f
 
+    @staticmethod
+    def dagger(A):
+        return jnp.einsum("...ab->...ba", jnp.conjugate(A))
 
     def fubini_study_metric_B(self, p, cdtype=np.complex64):
         r"""FS reference metric on a direct sum of line bundles, e.g. on 
@@ -314,7 +317,8 @@ class HarmonicBundle:
     def endomorphism_section(self, p, params):
         H = self.section_metric_network(p, params)
         H_0 = self.fubini_study_metric_V(p)
-        h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
+        # h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
+        h = jnp.einsum("...cb, ...ac->...ba", jnp.linalg.inv(H_0), H)
         return h  # h^b_a 
 
     @partial(jax.jit, static_argnums=(0,))
@@ -327,14 +331,19 @@ class HarmonicBundle:
     def exact_piece(self, p, pb, params):
         h = self.endomorphism_section(p, params)  # h^b_a
         dh = curvature.del_z(p, self.endomorphism_section, False, params)  # h^b_{ai}
-        dh = jnp.einsum("...bai, ...ui->...bau", dh, pb)
+        dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
         A_0 = hym.connection_form_V(p, pb, self.fubini_study_metric_V)
-        #_A1 = jnp.einsum("...ca, ...bci->...bai", h, A_0)
-        #_A2 = jnp.einsum("...bc, ...cai->...bai", h, A_0)
 
-        _A1 = jnp.einsum("...ac, ...cbi->...bai", h, A_0)
-        _A2 = jnp.einsum("...cb, ...aci->...bai", h, A_0)
-        return dh + _A1 - _A2
+        #_A1 = jnp.einsum("...cb, ...aci->...abi", h, A_0)
+        #_A2 = jnp.einsum("...ac, ...cbi->...abi", h, A_0)
+        _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
+        _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
+        holo_cov_der_h = dh + _A1 - _A2
+        #exact = jnp.einsum("...abi, ...bc->...aci", holo_cov_der_h, jnp.linalg.inv(h))
+        #exact = jnp.einsum("...abi, ...ca->...cbi", holo_cov_der_h, jnp.linalg.inv(h))
+        exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
+        
+        return exact
 
 
     def section_basis_V(self, p):
@@ -355,10 +364,12 @@ class HarmonicBundle:
         # return jnp.conjugate(embedding_matrix) @ section_matrix
 
     def TrF_correction(self, p, pb, params):
-        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
-        ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
-        ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        Tr_eta = jnp.einsum("...aaij->...ij", F_V + ddbar_h)
+        #F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
+        #ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
+        #ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
+        F = self.curvature_correction(p, pb, params)
+        Tr_eta = jnp.einsum("...aaij->...ij", F)
+
         return Tr_eta
 
     def contract_TrF(self, p, pb, params):
@@ -367,9 +378,21 @@ class HarmonicBundle:
         return jnp.einsum("...vu, ...uv->...", g_inv, Tr_eta)
 
     def codifferential_TrF(self, p, pb, params):
-        del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
-        del_z_contraction = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
-        return del_z_contraction
+
+        g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
+        TrF = self.TrF_correction(p, pb, params)
+        del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
+        del_z_TrF = jnp.einsum("...u, ...iu->...i", del_z_TrF, pb)
+        Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
+
+        _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
+        covariant_derivative_eta = del_z_TrF + _cov2
+        codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
+        return codiff
+
+        #del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
+        #codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
+        return codiff
 
     def curvature_form_fn(self, p, pb, params):
         F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
@@ -398,14 +421,10 @@ class HarmonicBundle:
         # (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
         # TODO
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                         self.N_sb, self.n_harmonic, complex_kernel=True, activation=activation)
+                                    self.N_sb, None, self.n_harmonic, complex_kernel=False, activation=activation)
         coeffs = jnp.squeeze(coeffs[0])
-        log_H = self.log_H_ref_fn(p)
-        H_corr = coeffs + jnp.einsum("...ij->...ji", jnp.conjugate(coeffs))
-        #return H_fs_V + C * H_corr * jnp.exp(log_H)
-        # sym_2V_section = jnp.zeros((self.rank_V, self.rank_V), dtype=self.cdtype)
         
-        # Basis of V-sections in ambient P^1 x ... x P^n
+        # Basis of V-sections
         sv = self.section_basis_V(p)  # [rank_V, dim]
         emb = self.embedding_matrix(p)
         A = jnp.conjugate(emb) @ jnp.einsum("...ij->...ji", emb)
@@ -415,8 +434,10 @@ class HarmonicBundle:
         dual_sv = jnp.einsum("...ab, ...bi->...ai", H_fs_V, jnp.conjugate(sv))
         sv_outer_sv = jnp.einsum("...ai, ...bj->...ijab", dual_sv, jnp.conjugate(dual_sv))
         
-        sym_update = jnp.einsum("...ij, ...ijab->...ab", coeffs, sv_outer_sv)
-        sym_update = sym_update + jnp.einsum("...ab->...ba", jnp.conjugate(sym_update))
+        sym_update = sv_outer_sv + jnp.einsum("...ijab->...ijba", jnp.conjugate(sv_outer_sv))
+        sym_update = jnp.einsum("...ij, ...ijab->...ab", coeffs, sym_update)
+        # return sym_update
+        # sym_update = sym_update + jnp.einsum("...ab->...ba", jnp.conjugate(sym_update))
         
         return H_fs_V + C * sym_update
 
@@ -443,18 +464,23 @@ class HarmonicBundle:
         """
         k = 1
         p_c = math_utils.to_complex(p)
+        H_fs_V = self.fubini_study_metric_V(p)
+        H = self.section_metric_network(p, params)
+        return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
+
         H_fs_B = self.fubini_study_metric_B(p)
         
         # TODO
         # aux = math_utils.to_real(self.section_basis_V(p).reshape(-1))
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                         k * self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
+                                         k * self.N_sb, None, self.n_harmonic, complex_kernel=False, activation=activation)
         sb = self.section_basis(p)
-        sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_B, sb)
-        end_V_basis = jnp.einsum("...ma, ...nb->...mnab", sb, sb_dual)#.reshape((-1, self.rank_B, self.rank_B))
+        sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_B, jnp.conjugate(sb))
+        end_V_basis = jnp.einsum("...ma, ...nb->...mnab", sb, sb_dual)
+        end_V_basis += jnp.einsum("...ma, ...nb->...mnba", jnp.conj(sb), jnp.conj(sb_dual))
 
         coeffs = jnp.squeeze(coeffs[0])
-        end_V_section = jnp.einsum("...mn, ...mnab->...ab", coeffs, end_V_basis) + jnp.eye(self.rank_B, dtype=self.cdtype)
+        end_V_section = jnp.einsum("...mn, ...mnab->...ab", coeffs, end_V_basis)# + jnp.eye(self.rank_B, dtype=self.cdtype)
         # return end_V_section
 
         # h = coeffs @ jnp.conjugate(jnp.einsum("...ij->...ji", coeffs))
@@ -473,7 +499,8 @@ class HarmonicBundle:
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
-        F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
+        # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
+        F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
@@ -558,7 +585,7 @@ class HarmonicBundle:
         model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         k = 1
         bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
-                                          n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
+                                          n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=False,
                                           activation=nn.gelu)
         self.aux_dim = None #self.rank_V * self.mb1.shape[0]
         _params, _opt_state, _ = self.create_train_state(
