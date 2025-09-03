@@ -52,7 +52,7 @@ class HarmonicBundle:
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
         self.rank_B = len(self.line_bundle_B)
-        self.N_sb = 5  # number of sections of $E$
+        self.N_sb = 3  # number of sections of $E$
         self.line_bundle_C = (4,)
         self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
