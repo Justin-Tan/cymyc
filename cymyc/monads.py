@@ -52,12 +52,12 @@ class HarmonicBundle:
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
         self.rank_B = len(self.line_bundle_B)
-        self.N_sb = 3  # number of sections of $E$
         self.line_bundle_C = (4,)
         self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
+        self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
@@ -314,19 +314,19 @@ class HarmonicBundle:
         F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
         return F
 
-    def endomorphism_section(self, p, params):
-        H = self.section_metric_network(p, params)
-        H_0 = self.fubini_study_metric_V(p)
-        # h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
-        h = jnp.einsum("...cb, ...ac->...ba", jnp.linalg.inv(H_0), H)
-        return h  # h^b_a 
-
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction(self, p, pb, params):
         F_0 = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
         d_correction = curvature.del_bar_z(p, self.exact_piece, False, pb, params)
         d_correction = jnp.einsum("...abiu, ...ju->...abij", d_correction, jnp.conjugate(pb))
         return F_0 + d_correction
+
+    def endomorphism_section(self, p, params):
+        H = self.section_metric_network(p, params)
+        H_0 = self.fubini_study_metric_V(p)
+        # h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
+        h = jnp.einsum("...cb, ...ac->...ba", jnp.linalg.inv(H_0), H)
+        return h  # h^b_a 
 
     def exact_piece(self, p, pb, params):
         h = self.endomorphism_section(p, params)  # h^b_a
@@ -342,8 +342,7 @@ class HarmonicBundle:
         
         return exact
 
-
-    def section_basis_V(self, p):
+    def _section_basis_V(self, p):
         r"""
         Smooth basis of sections of $V$ expressed in a local frame - typically Z_i^k. 
         """
@@ -359,6 +358,23 @@ class HarmonicBundle:
 
         return embedding_matrix @ section_matrix
         # return jnp.conjugate(embedding_matrix) @ section_matrix
+
+    def section_basis_V(self, p):
+        r"""
+        Smooth basis of sections of $V$ expressed in a local frame - typically Z_i^k. 
+        """
+        p_c = math_utils.to_complex(p)
+        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+
+        linear_monomials = poly_utils.monomial_evaluate_log(p, self.mb1)
+        linear_monomials = linear_monomials / p_c[patch_idx]
+        blocks = [linear_monomials] * self.rank_B
+        # rank(B) \times (\dim A_k \times rank(B))
+        section_matrix = jax.scipy.linalg.block_diag(*blocks)
+        embedding_matrix = self.embedding_matrix(p)
+
+        return embedding_matrix @ section_matrix
+
 
     def TrF_correction(self, p, pb, params):
         #F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
@@ -417,14 +433,18 @@ class HarmonicBundle:
         
         # (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
         # TODO
-        k = 4
+        k = 1
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
                                     k*self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
         coeffs = jnp.squeeze(coeffs[0])
-        return coeffs @ self.dagger(coeffs)
+        M = coeffs @ self.dagger(coeffs)
         
-        # Basis of V-sections
-        sv = self.section_basis_V(p)  # [rank_V, dim]
+        # Overcomplete basis of V-sections
+        sv = self.section_basis_V(p)  # [dim, big_number]
+        H_inv = jnp.einsum("...bm, ...mn, ...ab->...ab", jnp.conjugate(sv), M, sv)  # [\bar{b}, a]
+        return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
+
+
         emb = self.embedding_matrix(p)
         A = jnp.conjugate(emb) @ jnp.einsum("...ij->...ji", emb)
         A_inv = jnp.linalg.inv(A)
