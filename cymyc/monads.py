@@ -334,13 +334,10 @@ class HarmonicBundle:
         dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
         A_0 = hym.connection_form_V(p, pb, self.fubini_study_metric_V)
 
-        #_A1 = jnp.einsum("...cb, ...aci->...abi", h, A_0)
-        #_A2 = jnp.einsum("...ac, ...cbi->...abi", h, A_0)
         _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
         _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
         holo_cov_der_h = dh + _A1 - _A2
         #exact = jnp.einsum("...abi, ...bc->...aci", holo_cov_der_h, jnp.linalg.inv(h))
-        #exact = jnp.einsum("...abi, ...ca->...cbi", holo_cov_der_h, jnp.linalg.inv(h))
         exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
         
         return exact
@@ -420,9 +417,11 @@ class HarmonicBundle:
         
         # (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
         # TODO
+        k = 4
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                    self.N_sb, None, self.n_harmonic, complex_kernel=False, activation=activation)
+                                    k*self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
         coeffs = jnp.squeeze(coeffs[0])
+        return coeffs @ self.dagger(coeffs)
         
         # Basis of V-sections
         sv = self.section_basis_V(p)  # [rank_V, dim]
@@ -583,9 +582,9 @@ class HarmonicBundle:
         )
         self.n_units_harmonic = [48,48,48,48] #[48, 64, 64, 64, 48]
         model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        k = 1
+        k = 4
         bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
-                                          n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=False,
+                                          n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
                                           activation=nn.gelu)
         self.aux_dim = None #self.rank_V * self.mb1.shape[0]
         _params, _opt_state, _ = self.create_train_state(
