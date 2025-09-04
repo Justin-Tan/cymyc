@@ -329,8 +329,8 @@ class HarmonicBundle:
         return h  # h^b_a 
 
     def exact_piece(self, p, pb, params):
-        h = self.endomorphism_section(p, params)  # h^b_a
-        dh = curvature.del_z(p, self.endomorphism_section, False, params)  # h^b_{ai}
+        h = self.endomorphism_network(p, params)  # h^b_a
+        dh = curvature.del_z(p, self.endomorphism_network, False, params)  # h^b_{ai}
         dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
         A_0 = hym.connection_form_V(p, pb, self.fubini_study_metric_V)
 
@@ -485,29 +485,34 @@ class HarmonicBundle:
         r"""
         blah
         """
-        k = 1
-        p_c = math_utils.to_complex(p)
-        H_fs_V = self.fubini_study_metric_V(p)
-        H = self.section_metric_network(p, params)
-        return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
+        k = 2
+        # p_c = math_utils.to_complex(p)
+        # H_fs_V = self.fubini_study_metric_V(p)
+        # H = self.section_metric_network(p, params)
+        # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
         H_fs_B = self.fubini_study_metric_B(p)
         
         # TODO
         # aux = math_utils.to_real(self.section_basis_V(p).reshape(-1))
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                         k * self.N_sb, None, self.n_harmonic, complex_kernel=False, activation=activation)
+                                         k * self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
+        coeffs = jnp.squeeze(coeffs[0])
+        M = coeffs @ self.dagger(coeffs)
+        emb = self.embedding_matrix(p)
+        _M = jnp.einsum("...ab, ...bc->...ca", M, jnp.linalg.inv(H_fs_B))
+        return jnp.einsum("...ab, ...ia, ...jb->...ij", _M, emb, 
+                          jnp.conjugate(emb))
+    
         sb = self.section_basis(p)
         sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_B, jnp.conjugate(sb))
         end_V_basis = jnp.einsum("...ma, ...nb->...mnab", sb, sb_dual)
         end_V_basis += jnp.einsum("...ma, ...nb->...mnba", jnp.conj(sb), jnp.conj(sb_dual))
 
-        coeffs = jnp.squeeze(coeffs[0])
         end_V_section = jnp.einsum("...mn, ...mnab->...ab", coeffs, end_V_basis)# + jnp.eye(self.rank_B, dtype=self.cdtype)
         # return end_V_section
 
         # h = coeffs @ jnp.conjugate(jnp.einsum("...ij->...ji", coeffs))
-        emb = self.embedding_matrix(p)
         proj = self.projection_matrix(p)
 
         return jnp.einsum("...ai,...ij,...jb->...ab", proj, end_V_section, emb.T)
