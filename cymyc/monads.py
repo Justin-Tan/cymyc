@@ -441,7 +441,11 @@ class HarmonicBundle:
         
         # Overcomplete basis of V-sections
         sv = self.section_basis_V(p)  # [dim, big_number]
-        H_inv = jnp.einsum("...bm, ...mn, ...ab->...ab", jnp.conjugate(sv), M, sv)  # [\bar{b}, a]
+        dual_sv = jnp.einsum("...ab, ...bn->...an", H_fs_V, jnp.conjugate(sv))
+        H = jnp.einsum("...am, ...mn, ...bn->...ab", dual_sv, M, jnp.conjugate(dual_sv))
+        return H_fs_V + H
+
+        H_inv = jnp.einsum("...bm, ...mn, ...an->...ba", jnp.conjugate(sv), M, sv)  # [\bar{b}, a]
         return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
 
 
@@ -600,9 +604,9 @@ class HarmonicBundle:
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        self.n_units_harmonic = [48,48,48,48] #[48, 64, 64, 64, 48]
+        self.n_units_harmonic = [48,48,48] #[48, 64, 64, 64, 48]
         model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        k = 4
+        k = 1
         bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
                                           n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
                                           activation=nn.gelu)
