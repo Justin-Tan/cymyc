@@ -221,7 +221,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     matrix_dim : int
         The dimension of the output square matrix.
     """
-    matrix_dim: int
+    matrix_dim: int = -1
 
     @nn.compact
     def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
@@ -265,7 +265,8 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
 
         # --- Construct the lower-triangular matrix L ---
         
-        diag_elements = nn.softplus(out[:self.matrix_dim])
+        # diag_elements = nn.softplus(out[:self.matrix_dim])
+        diag_elements = jnp.exp(out[:self.matrix_dim])
 
         # 2. Extract and process off-diagonal elements (complex)
         off_diag_real = out[self.matrix_dim : self.matrix_dim + (n_out_cholesky - self.matrix_dim) // 2]
@@ -291,7 +292,8 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
     """
     # last layer is coeff_layer
     print(sorted(params.keys()))
-    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if 'kernel' in params[k].keys()]
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if \
+            ('kernel' in params[k].keys() and 'layer' in k)]
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,

@@ -304,13 +304,11 @@ class HarmonicBundle:
         return kappa
 
     def connection_form(self, p, pb, params):
-        # pb = self.pb_fn(math_utils.to_complex(p))
         A = hym.connection_form_V(p, pb, self.section_metric_network, params)
         return A
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_form(self, p, pb, params):
-        # return self.curvature_correction(p, pb, params)
         F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
         return F
 
@@ -380,7 +378,8 @@ class HarmonicBundle:
         #F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
         #ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         #ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        F = self.curvature_correction(p, pb, params)
+        # F = self.curvature_correction(p, pb, params)
+        F = self.curvature_form_fn(p, pb, params)
         Tr_eta = jnp.einsum("...aaij->...ij", F)
 
         return Tr_eta
@@ -500,7 +499,7 @@ class HarmonicBundle:
         H_fs_V = self.fubini_study_metric_V(p)
 
         sb = self.section_basis_V(p)
-        sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_V, jnp.conjugate(sb))
+        sb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(sb))
         h = jnp.einsum("...am, ...mn, ...bn->...ab", sb, coeffs, sb_dual)
         return h
 
@@ -514,8 +513,8 @@ class HarmonicBundle:
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
-        # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
-        F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
+        F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
+        # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
@@ -585,7 +584,7 @@ class HarmonicBundle:
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        self.n_units_harmonic = [48,48,48] #[48, 64, 64, 64, 48]
+        self.n_units_harmonic = [32,32,32] #[48,48,48] 
         # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         # k = 1
         # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
