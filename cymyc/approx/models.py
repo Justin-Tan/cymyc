@@ -208,6 +208,94 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
         out = nn.Dense(self.n_out, name='scalar')(x)
         return jnp.squeeze(out)
     
+class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
+    r"""
+    A network that outputs a complex lower-triangular matrix L, suitable for
+    parameterising a Hermitian metric H via a Cholesky decomposition H = L @ L.conj().T.
+
+    The diagonal entries of L are enforced to be real and positive to ensure H is
+    positive-definite.
+
+    Attributes
+    ----------
+    matrix_dim : int
+        The dimension of the output square matrix.
+    """
+    matrix_dim: int
+
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
+        """
+        Forward pass that outputs a complex lower-triangular matrix.
+
+        Parameters
+        ----------
+        x : Float[Array, "i"]
+            Input array of homogeneous coordinates.
+
+        Returns
+        -------
+        Complex[Array, "matrix_dim matrix_dim"]
+            A lower-triangular matrix with complex entries and a positive real diagonal.
+        """
+        if self.use_spectral_embedding is True:
+            x = math_utils.to_complex(jnp.squeeze(x))
+            spectral_out = []
+
+            for i in range(len(self.ambient)):
+                s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+                p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+                p_ambient_i = math_utils.to_real(p_ambient_i)
+                spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
+
+            # x = jnp.stack(spectral_out, axis=-1).reshape(-1)
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
+        
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i != self.n_hidden - 1:
+                x = self.activation(x)
+            
+        n_out_cholesky = self.matrix_dim * self.matrix_dim
+        out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(x))
+
+        # Get the indices for the lower-triangular part of the matrix
+        tril_indices = jnp.tril_indices(self.matrix_dim)
+        diag_indices = jnp.diag_indices(self.matrix_dim)
+
+        # --- Construct the lower-triangular matrix L ---
+        
+        diag_elements = nn.softplus(out[:self.matrix_dim])
+
+        # 2. Extract and process off-diagonal elements (complex)
+        off_diag_real = out[self.matrix_dim : self.matrix_dim + (n_out_cholesky - self.matrix_dim) // 2]
+        off_diag_imag = out[self.matrix_dim + (n_out_cholesky - self.matrix_dim) // 2 :]
+        
+        off_diag_elements = jax.lax.complex(off_diag_real, off_diag_imag)
+
+        # 3. Populate the matrix
+        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=jnp.complex64)
+        L = L.at[diag_indices].set(diag_elements)
+        
+        # Get lower-triangular indices, excluding the diagonal
+        tril_no_diag_indices = jnp.tril_indices(self.matrix_dim, k=-1)
+        L = L.at[tril_no_diag_indices].set(off_diag_elements)
+
+        return L
+
+@partial(jit, static_argnums=(2,3,4,5))
+def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
+                     ambient: Sequence[int], matrix_dim: int,
+                     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
+    r"""Wrapper to feed parameters into forward pass for section coefficient network.
+    """
+    # last layer is coeff_layer
+    print(sorted(params.keys()))
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if 'kernel' in params[k].keys()]
+
+    variables = {'params': params}
+    return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
+                           activation=activation).apply(variables, p)
 
 class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
     r"""
