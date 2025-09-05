@@ -299,9 +299,9 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         return L @ jnp.conjugate(L).T
 
 @partial(jit, static_argnums=(2,3,4,5))
-def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
-                     ambient: Sequence[int], matrix_dim: int,
-                     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
+def cholesky_head(params: Mapping[str, Array], n_homo_coords: int, 
+                ambient: Sequence[int], matrix_dim: int, p: Float[Array, "i"] = None,
+                activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
     # last layer is coeff_layer
@@ -311,7 +311,7 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
-                           activation=activation).apply(variables, p)
+                           activation=activation).apply(variables)  # .apply(variables, p)
 
 class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
     r"""
