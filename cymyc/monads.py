@@ -492,9 +492,7 @@ class HarmonicBundle:
         # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
         # TODO
-        L = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                 self.N_sb)
-        coeffs = L @ self.dagger(L)
+        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self.N_sb)
         emb = self.embedding_matrix(p)
         H_fs_V = self.fubini_study_metric_V(p)
 
@@ -540,8 +538,14 @@ class HarmonicBundle:
         [storage[k].append(v) for (k,v) in summary.items()]
         utils.save_logs(storage, self.name, epoch)
         return storage
-
-
+    
+    @staticmethod
+    def _create_train_state(rng, model, optimizer):
+        rng, init_rng = random.split(rng)
+        # params = model.init(rng, jnp.ones([1, data_dim]))['params']
+        params = model.init(rng)['params']
+        opt_state = optimizer.init(params)
+        return params, opt_state, init_rng
     
     def fit(self, metric_fn, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
             shuffle_rng = np.random.default_rng(), name=None):
@@ -584,7 +588,7 @@ class HarmonicBundle:
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        self.n_units_harmonic = [32,32,32] #[48,48,48] 
+        self.n_units_harmonic = [32,32,32,32] #[48,48,48] 
         # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         # k = 1
         # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
@@ -593,8 +597,10 @@ class HarmonicBundle:
         coeff_class = models.CholeskyNetwork
         bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, matrix_dim=self.N_sb)
 
-        _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
-        print('Input kernel shape', _params['layers_0']['kernel'].shape)
+        # _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
+        _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
+
+        # print('Input kernel shape', _params['layers_0']['kernel'].shape)
 
         t0 = time.time()
         with jax.default_device(device):

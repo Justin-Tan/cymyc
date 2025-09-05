@@ -222,9 +222,10 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         The dimension of the output square matrix.
     """
     matrix_dim: int = -1
+    cdtype: jnp.dtype = jnp.complex64
 
     @nn.compact
-    def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
+    def __inputcall__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
         """
         Forward pass that outputs a complex lower-triangular matrix.
 
@@ -248,7 +249,6 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
                 p_ambient_i = math_utils.to_real(p_ambient_i)
                 spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
 
-            # x = jnp.stack(spectral_out, axis=-1).reshape(-1)
             x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
         
         for i, layer in enumerate(self.layers):
@@ -259,30 +259,44 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(x))
 
-        # Get the indices for the lower-triangular part of the matrix
-        tril_indices = jnp.tril_indices(self.matrix_dim)
-        diag_indices = jnp.diag_indices(self.matrix_dim)
+        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
+        diag_idx = jnp.diag_indices(self.matrix_dim)
 
         # --- Construct the lower-triangular matrix L ---
         
-        # diag_elements = nn.softplus(out[:self.matrix_dim])
-        diag_elements = jnp.exp(out[:self.matrix_dim])
+        diag = out[:self.matrix_dim]
+        diag = jnp.exp(diag)  # nn.softplus(diag)
+        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
+        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
 
-        # 2. Extract and process off-diagonal elements (complex)
-        off_diag_real = out[self.matrix_dim : self.matrix_dim + (n_out_cholesky - self.matrix_dim) // 2]
-        off_diag_imag = out[self.matrix_dim + (n_out_cholesky - self.matrix_dim) // 2 :]
-        
-        off_diag_elements = jax.lax.complex(off_diag_real, off_diag_imag)
+        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
+        L = L.at[diag_idx].set(diag)
+        L = L.at[tril_off_diag_idx].set(off_diag)
+        return L @ jnp.conjugate(L).T
+    
+    @nn.compact
+    def __call__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
 
-        # 3. Populate the matrix
-        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=jnp.complex64)
-        L = L.at[diag_indices].set(diag_elements)
-        
-        # Get lower-triangular indices, excluding the diagonal
-        tril_no_diag_indices = jnp.tril_indices(self.matrix_dim, k=-1)
-        L = L.at[tril_no_diag_indices].set(off_diag_elements)
+        # for i, layer in enumerate(self.layers):
+        #     x = layer(x)
+        #     if i != self.n_hidden - 1:
+        #         x = self.activation(x)
+            
+        n_out_cholesky = self.matrix_dim * self.matrix_dim
+        out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
 
-        return L
+        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
+        diag_idx = jnp.diag_indices(self.matrix_dim)
+
+        diag = out[:self.matrix_dim]
+        diag = jnp.exp(diag)  # nn.softplus(diag)
+        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
+        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
+
+        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
+        L = L.at[diag_idx].set(diag)
+        L = L.at[tril_off_diag_idx].set(off_diag)
+        return L @ jnp.conjugate(L).T
 
 @partial(jit, static_argnums=(2,3,4,5))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
