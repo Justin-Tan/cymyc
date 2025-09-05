@@ -57,7 +57,7 @@ class HarmonicBundle:
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
-        self.N_sb = self.rank_B  # len(self.mb1) * self.rank_B # 3  # number of sections of $E$
+        self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
@@ -542,17 +542,6 @@ class HarmonicBundle:
         utils.save_logs(storage, self.name, epoch)
         return storage
 
-    
-    @staticmethod
-    def create_train_state(rng, model, optimizer, data_dim, aux_dim=None):
-        rng, init_rng = random.split(rng)
-        if aux_dim is None:
-            params = model.init(rng, jnp.ones([1, data_dim]))['params']
-        else:
-            params = model.init(rng, jnp.ones([1, data_dim]),
-                                     jnp.ones([1, aux_dim]))['params']
-        opt_state = optimizer.init(params)
-        return params, opt_state, init_rng
 
     
     def fit(self, metric_fn, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
@@ -597,14 +586,15 @@ class HarmonicBundle:
           optax.adamw(learning_rate=lr),
         )
         self.n_units_harmonic = [48,48,48] #[48, 64, 64, 64, 48]
-        model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        k = 1
-        bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
-                                          n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
-                                          activation=nn.gelu)
-        self.aux_dim = None #self.rank_V * self.mb1.shape[0]
-        _params, _opt_state, _ = self.create_train_state(
-            _k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)#, aux_dim=self.aux_dim * 2)
+        # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
+        # k = 1
+        # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
+        #                                   n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
+        #                                   activation=nn.gelu)
+        coeff_class = models.CholeskyNetwork
+        bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, matrix_dim=self.N_sb)
+
+        _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         print('Input kernel shape', _params['layers_0']['kernel'].shape)
 
         t0 = time.time()
@@ -631,10 +621,6 @@ class HarmonicBundle:
                     pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     data = (p, pb, w)
 
-                    #_params, _opt_state, loss = hym.train_step(
-                    #    data, _params, _opt_state, _tx, self.curvature_form, self._metric_fn,
-                    #    self.section_metric_network, 
-                    #    self.rank_V, self._slope)
                     _params, _opt_state, loss = hym._train_step(data, _params, _opt_state, _tx, self.objective_function)
                     wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
 
