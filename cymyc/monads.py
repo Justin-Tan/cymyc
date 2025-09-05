@@ -493,27 +493,16 @@ class HarmonicBundle:
         # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
         # TODO
-        # aux = math_utils.to_real(self.section_basis_V(p).reshape(-1))
-        coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                         self.k * self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
-        coeffs = jnp.squeeze(coeffs[0])
-        M = coeffs @ self.dagger(coeffs)
+        L = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
+                                 self.N_sb)
+        coeffs = L @ self.dagger(L)
         emb = self.embedding_matrix(p)
-        return jnp.einsum("...ab, ...ia, ...jb->...ij", M, emb, emb)
-        
-    
-        sb = self.section_basis(p)
-        sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_B, jnp.conjugate(sb))
-        end_V_basis = jnp.einsum("...ma, ...nb->...mnab", sb, sb_dual)
-        end_V_basis += jnp.einsum("...ma, ...nb->...mnba", jnp.conj(sb), jnp.conj(sb_dual))
+        H_fs_V = self.fubini_study_metric_V(p)
 
-        end_V_section = jnp.einsum("...mn, ...mnab->...ab", coeffs, end_V_basis)# + jnp.eye(self.rank_B, dtype=self.cdtype)
-        # return end_V_section
-
-        # h = coeffs @ jnp.conjugate(jnp.einsum("...ij->...ji", coeffs))
-        proj = self.projection_matrix(p)
-
-        return jnp.einsum("...ai,...ij,...jb->...ab", proj, end_V_section, emb.T)
+        sb = self.section_basis_V(p)
+        sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_V, jnp.conjugate(sb))
+        h = jnp.einsum("...am, ...mn, ...bn->...ab", sb, coeffs, sb_dual)
+        return h
 
     def loss_breakdown(self, data, params, bundle_metric_fn=None):
         
