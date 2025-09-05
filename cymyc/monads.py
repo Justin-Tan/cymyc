@@ -57,7 +57,7 @@ class HarmonicBundle:
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
-        self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
+        self.N_sb = self.rank_B  # len(self.mb1) * self.rank_B # 3  # number of sections of $E$
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
@@ -367,7 +367,7 @@ class HarmonicBundle:
         patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
 
         linear_monomials = poly_utils.monomial_evaluate_log(p, self.mb1)
-        linear_monomials = linear_monomials / p_c[patch_idx]
+        linear_monomials = linear_monomials# / p_c[patch_idx]
         blocks = [linear_monomials] * self.rank_B
         # rank(B) \times (\dim A_k \times rank(B))
         section_matrix = jax.scipy.linalg.block_diag(*blocks)
@@ -390,21 +390,23 @@ class HarmonicBundle:
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         return jnp.einsum("...vu, ...uv->...", g_inv, Tr_eta)
 
+    @partial(jax.jit, static_argnums=(0,))
     def codifferential_TrF(self, p, pb, params):
 
-        g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
-        TrF = self.TrF_correction(p, pb, params)
-        del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
-        del_z_TrF = jnp.einsum("...u, ...iu->...i", del_z_TrF, pb)
-        Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
+        # g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
+        # TrF = self.TrF_correction(p, pb, params)
+        # del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
+        # del_z_TrF = jnp.einsum("...iju, ...ku->...ijk", del_z_TrF, pb)
 
-        _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
-        covariant_derivative_eta = del_z_TrF + _cov2
-        codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
-        return codiff
+        # Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
+        # _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
+        # covariant_derivative_eta = del_z_TrF - _cov2
+        # covariant_derivative_eta = del_z_TrF
+        # codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
+        # return codiff
 
-        #del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
-        #codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
+        del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
+        codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
         return codiff
 
     def curvature_form_fn(self, p, pb, params):
@@ -485,24 +487,20 @@ class HarmonicBundle:
         r"""
         blah
         """
-        k = 2
         # p_c = math_utils.to_complex(p)
         # H_fs_V = self.fubini_study_metric_V(p)
         # H = self.section_metric_network(p, params)
         # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
-        H_fs_B = self.fubini_study_metric_B(p)
-        
         # TODO
         # aux = math_utils.to_real(self.section_basis_V(p).reshape(-1))
         coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                         k * self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
+                                         self.k * self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
         coeffs = jnp.squeeze(coeffs[0])
         M = coeffs @ self.dagger(coeffs)
         emb = self.embedding_matrix(p)
-        _M = jnp.einsum("...ab, ...bc->...ca", M, jnp.linalg.inv(H_fs_B))
-        return jnp.einsum("...ab, ...ia, ...jb->...ij", _M, emb, 
-                          jnp.conjugate(emb))
+        return jnp.einsum("...ab, ...ia, ...jb->...ij", M, emb, emb)
+        
     
         sb = self.section_basis(p)
         sb_dual = jnp.einsum("...ab, ...mb->...ma", H_fs_B, jnp.conjugate(sb))
