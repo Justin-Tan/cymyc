@@ -131,6 +131,8 @@ if __name__ == "__main__":
     parser.add_argument('-n_p', '--num_pts', type=int, help="Number of points to generate.", default=100000)
     parser.add_argument('-val', '--val_frac', type=float, help="Percentage of points to use for validation.", default=0.2)
     parser.add_argument('-psi', '--psi', type=float, help="Complex moduli parameter.", default=0.0)
+    parser.add_argument('-patch', '--patch', type=int, help="Patch points will be returned in.", default=None)
+
     args = parser.parse_args()
 
     start = time.time()
@@ -160,7 +162,22 @@ if __name__ == "__main__":
     # check CY condition
     abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(p, monomials, coefficients)).max()
     print(f'Max locus violation: {abs_poly_val:.7e}')
-    
+
+    def keep_patch(p, patch):
+        m = jnp.argmax(jnp.abs(p), axis=-1)
+        return p[m == patch]
+
+    if args.patch is not None:
+        _p = keep_patch(p, args.patch)
+        out, total = [_p], _p.shape[0]
+        while total < (n_p + v_p):
+            _p = sample_intersect_hypersurface(key, int(n_coords * (n_p + v_p - total)), cy_dim, monomials, coefficients)
+            _p = keep_patch(_p, args.patch)
+            total += _p.shape[0]
+            out.append(_p)
+            print(f'Points in patch {args.patch} accumulated:', total)
+        p = jnp.concatenate(out, axis=0)[:(n_p + v_p)]
+
     det_g_FS_fn = fubini_study.det_fubini_study_pb
 
     from tqdm import tqdm
@@ -191,17 +208,6 @@ if __name__ == "__main__":
     weights, pullbacks = np.squeeze(np.concatenate(weights, axis=0)), np.squeeze(np.concatenate(pullbacks, axis=0))
     dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
     p = math_utils.to_real(p)
-
-    """
-    weights, pullbacks, dVol_Omegas, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
-        p, dQdz_monomials, dQdz_coeffs, cy_dim)
-
-    p = math_utils.to_real(p)
-
-    _det_g_FS_pb = vmap(det_g_FS_fn)(p, pullbacks)
-    vol_g = jnp.mean(weights * _det_g_FS_pb / dVol_Omegas).item()
-    vol_Omega = jnp.mean(weights).item()
-    """
 
     kappa = (vol_g / vol_Omega)
 

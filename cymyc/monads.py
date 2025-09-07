@@ -103,6 +103,10 @@ class HarmonicBundle:
         
         self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
 
+        _monad_map = [v for v in variables[:4]]
+        self.monad_map_power_matrix_DKLR = poly_utils.monomials_to_power_matrix(_monad_map, variables)
+        self._N_sb = 19
+
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
@@ -247,13 +251,38 @@ class HarmonicBundle:
         patch_idx = 0  #jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         
         # section_matrix = jnp.zeros((self.rank_B, len(self.mb3) * self.rank_B), dtype=cdtype)
-        Ok_powers = self.mb3.at[:,patch_idx].subtract(3)
+        # Ok_powers = self.mb3.at[:,patch_idx].subtract(3)
+        Ok_powers = self.mb3
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
     
         blocks = [Ok_monomials] * self.rank_B
         section_matrix = jax.scipy.linalg.block_diag(*blocks)
         embedding_matrix = self.embedding_matrix(p)
     
+        return embedding_matrix @ section_matrix
+
+    def embedding_matrix_DKLR(self, p):
+        r"""
+        Describes embedding $\iota: V \righthookarrow B$.
+        """
+        patch_idx = 0  # jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        proj = jnp.eye(self.rank_V, dtype=self.cdtype)
+        f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_DKLR)
+        col = -f_p# / f_p[patch_idx]
+        col = jnp.delete(col, patch_idx, assume_unique_indices=True)
+        return jnp.insert(proj, patch_idx, col, axis=-1)
+
+    def twisted_section_basis_DKLR(self, p):
+        r"""
+        Holomorphic sections of twisted dual bundle $V^{\vee} \otimes O_X(k)$,
+        expressed in a local frame - typically Z_i^k. 
+        """
+        Ok_powers = self.mb1
+        Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
+        blocks = [Ok_monomials] * self.rank_B
+        section_matrix = jax.scipy.linalg.block_diag(*blocks)
+        embedding_matrix = self.embedding_matrix_DKLR(p)
+        return jnp.delete(embedding_matrix @ section_matrix, 0, axis=1, assume_unique_indices=True)
         return embedding_matrix @ section_matrix
         
     @partial(jax.jit, static_argnums=(0,))
@@ -312,6 +341,12 @@ class HarmonicBundle:
     def curvature_form(self, p, pb, params):
         F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
         return F
+
+    def curvature_form_fn(self, p, pb, params):
+        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
+        ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
+        ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
+        return F_V + ddbar_h
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction(self, p, pb, params):
@@ -410,12 +445,6 @@ class HarmonicBundle:
         codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
         return codiff
 
-    def curvature_form_fn(self, p, pb, params):
-        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
-        ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
-        ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        return F_V + ddbar_h
-
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params):
         (p, pb, w) = data
@@ -453,8 +482,9 @@ class HarmonicBundle:
         return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
         """
 
-        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self.N_sb)
-        tsb = self.twisted_section_basis(p)
+        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+        # tsb = self.twisted_section_basis(p)
+        tsb = self.twisted_section_basis_DKLR(p)
         G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
         return jnp.linalg.inv(G_inv)
 
