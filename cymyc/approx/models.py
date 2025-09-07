@@ -289,7 +289,8 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         diag_idx = jnp.diag_indices(self.matrix_dim)
 
         diag = out[:self.matrix_dim]
-        diag = jnp.exp(diag)  # nn.softplus(diag)
+        # diag = jnp.exp(diag)  
+        diag = nn.softplus(diag)
         off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
         off_diag = jax.lax.complex(off_diag_r, off_diag_i)
 

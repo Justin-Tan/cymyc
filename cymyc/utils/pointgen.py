@@ -171,7 +171,8 @@ if __name__ == "__main__":
         _p = keep_patch(p, args.patch)
         out, total = [_p], _p.shape[0]
         while total < (n_p + v_p):
-            _p = sample_intersect_hypersurface(key, int(n_coords * (n_p + v_p - total)), cy_dim, monomials, coefficients)
+            _p = sample_intersect_hypersurface(key, int(n_coords * (n_p + v_p - total)) + v_p, 
+                    cy_dim, monomials, coefficients)
             _p = keep_patch(_p, args.patch)
             total += _p.shape[0]
             out.append(_p)

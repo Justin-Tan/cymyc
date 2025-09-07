@@ -620,7 +620,8 @@ class HarmonicBundle:
         #                                   n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
         #                                   activation=nn.gelu)
         coeff_class = models.CholeskyNetwork
-        bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, matrix_dim=self.N_sb)
+        bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
+                matrix_dim=self._N_sb)
 
         # _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
