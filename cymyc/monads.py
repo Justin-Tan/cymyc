@@ -449,11 +449,13 @@ class HarmonicBundle:
     def objective_function(self, data, params):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
-        codiff = jnp.squeeze(codiff)
+        # codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
+        # codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
-        codiff_loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
-        return codiff_loss
+        # loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
+        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form, self._metric_fn,
+                                                       self.section_metric_network)
+        return loss
 
     def section_metric_network(self, p, params, activation=nn.gelu):
         r"""
