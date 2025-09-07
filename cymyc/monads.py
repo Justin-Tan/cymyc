@@ -57,7 +57,7 @@ class HarmonicBundle:
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
-        self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
+        # self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
@@ -90,6 +90,7 @@ class HarmonicBundle:
 
         self.n_Vk = self.rank_B * poly_utils.dim_OXk(self.ambient, self.twisting_degree-1, self.monomial_basis.mod_degree)
         self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)
+        self.N_sb = self.n_Vk
         
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         variables = sp.symarray('z', ambient.item() + len(ambient))
@@ -205,7 +206,7 @@ class HarmonicBundle:
         r"""
         Describes embedding $\iota: V \righthookarrow B$.
         """
-        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        patch_idx = 0  # jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         proj = jnp.eye(self.rank_V, dtype=self.cdtype)
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
         col = -f_p / f_p[patch_idx]
@@ -243,7 +244,7 @@ class HarmonicBundle:
         expressed in a local frame - typically Z_i^k. 
         """
         p_c = math_utils.to_complex(p)
-        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        patch_idx = 0  #jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         
         # section_matrix = jnp.zeros((self.rank_B, len(self.mb3) * self.rank_B), dtype=cdtype)
         Ok_powers = self.mb3.at[:,patch_idx].subtract(3)
@@ -251,7 +252,7 @@ class HarmonicBundle:
     
         blocks = [Ok_monomials] * self.rank_B
         section_matrix = jax.scipy.linalg.block_diag(*blocks)
-        embedding_matrix = self.embedding_matrix(p, cdtype)
+        embedding_matrix = self.embedding_matrix(p)
     
         return embedding_matrix @ section_matrix
         
@@ -379,7 +380,8 @@ class HarmonicBundle:
         #ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         #ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
         # F = self.curvature_correction(p, pb, params)
-        F = self.curvature_form_fn(p, pb, params)
+        # F = self.curvature_form_fn(p, pb, params)
+        F = self.curvature_form(p, pb, params)
         Tr_eta = jnp.einsum("...aaij->...ij", F)
 
         return Tr_eta
@@ -428,6 +430,7 @@ class HarmonicBundle:
         r"""
         Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
         """
+        """
         C = 1.
         p_c = math_utils.to_complex(p)
         H_fs_V = self.fubini_study_metric_V(p)
@@ -448,7 +451,12 @@ class HarmonicBundle:
 
         H_inv = jnp.einsum("...bm, ...mn, ...an->...ba", jnp.conjugate(sv), M, sv)  # [\bar{b}, a]
         return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
+        """
 
+        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self.N_sb)
+        tsb = self.twisted_section_basis(p)
+        G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
+        return jnp.linalg.inv(G_inv)
 
         emb = self.embedding_matrix(p)
         A = jnp.conjugate(emb) @ jnp.einsum("...ij->...ji", emb)
@@ -465,22 +473,6 @@ class HarmonicBundle:
         
         return H_fs_V + C * sym_update
 
-        # for i in range(len(self.ambient)):
-        for i in range(coeffs.shape[0]):
-            #matrix_update = jnp.einsum("...ij, ...ijab->...ab", jnp.logaddexp(jnp.squeeze(coeffs[i]), 0), 
-            #                           0.5 * (sym1 + sym2))
-            matrix_update_i = jnp.einsum("...ij, ...ijab->...ab", jnp.squeeze(coeffs[i]), 
-                                       0.5 * (sym1 + sym2))
-            sym_2B_section = sym_2B_section + C * matrix_update_i
-            # sym_2B_section += matrix_update
-    
-        # return sym_2B_section
-        proj_B2V = self.projection_matrix(p)
-        sym_2V_section = jnp.einsum("...ab, ...ia, ...jb->...ij", sym_2B_section, proj_B2V, proj_B2V)
-        return sym_2V_section
-        # metric_ansatz = H_fs + sym_2B_section
-        metric_ansatz = self.fubini_study_metric_V(p) + sym_2V_section
-        return metric_ansatz
 
     def endomorphism_network(self, p, params, activation=nn.gelu):
         r"""
@@ -509,9 +501,12 @@ class HarmonicBundle:
         if bundle_metric_fn is not None:
             H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
 
-        h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
+        h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
+
+        #h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
-        F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
+        F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
+        # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
@@ -520,7 +515,7 @@ class HarmonicBundle:
         g_tr_F = vmap(jnp.trace)(g_tr_F)
 
         return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
-                'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega}
+                'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega}
 
     def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
         
