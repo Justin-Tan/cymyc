@@ -485,7 +485,7 @@ class HarmonicBundle:
         return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
         """
 
-        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
         # tsb = self.twisted_section_basis(p)
         tsb = self.twisted_section_basis_DKLR(p)
         G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
@@ -628,8 +628,8 @@ class HarmonicBundle:
         bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
                 matrix_dim=self._N_sb)
 
-        # _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
-        _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
+        _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
+        # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
 
         # print('Input kernel shape', _params['layers_0']['kernel'].shape)
 

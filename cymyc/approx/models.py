@@ -225,7 +225,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     cdtype: jnp.dtype = jnp.complex64
 
     @nn.compact
-    def __inputcall__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
+    def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
         """
         Forward pass that outputs a complex lower-triangular matrix.
 
@@ -261,11 +261,9 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
 
         tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
         diag_idx = jnp.diag_indices(self.matrix_dim)
-
-        # --- Construct the lower-triangular matrix L ---
         
         diag = out[:self.matrix_dim]
-        diag = jnp.exp(diag)  # nn.softplus(diag)
+        diag = nn.softplus(diag)
         off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
         off_diag = jax.lax.complex(off_diag_r, off_diag_i)
 
@@ -275,12 +273,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         return L @ jnp.conjugate(L).T
     
     @nn.compact
-    def __call__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
-
-        # for i, layer in enumerate(self.layers):
-        #     x = layer(x)
-        #     if i != self.n_hidden - 1:
-        #         x = self.activation(x)
+    def __call2__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
             
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
@@ -300,8 +293,8 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         return L @ jnp.conjugate(L).T
 
 @partial(jit, static_argnums=(2,3,4,5))
-def cholesky_head(params: Mapping[str, Array], n_homo_coords: int, 
-                ambient: Sequence[int], matrix_dim: int, p: Float[Array, "i"] = None,
+def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
+                ambient: Sequence[int], matrix_dim: int,
                 activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
@@ -312,7 +305,9 @@ def cholesky_head(params: Mapping[str, Array], n_homo_coords: int,
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
-                           activation=activation).apply(variables)  # .apply(variables, p)
+                           activation=activation).apply(variables, p)
+                           # activation=activation).apply(variables)
+
 
 class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
     r"""
