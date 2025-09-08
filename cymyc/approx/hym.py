@@ -76,7 +76,8 @@ def objective_function(data, params, curvature_form_fn, metric_fn, slope: float)
     g = vmap(metric_fn)(p)  # frozen params
     F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
 
-    g_tr_F = -jnp.real(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))  # why is this real?
+    # eigs of Hermitian matrix are real
+    g_tr_F = -jnp.real(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))
     # return (w*(g_tr_F - slope)**2).sum() / w.sum()  # look at Ashmore paper
     return jnp.mean(w * (g_tr_F - slope)**2) / jnp.mean(w)  # look at Ashmore paper
 
