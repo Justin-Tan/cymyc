@@ -213,7 +213,7 @@ class HarmonicBundle:
         patch_idx = 0  # jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         proj = jnp.eye(self.rank_V, dtype=self.cdtype)
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
-        col = -f_p / f_p[patch_idx]
+        col = -f_p # / f_p[patch_idx]
         col = jnp.delete(col, patch_idx, assume_unique_indices=True)
         return jnp.insert(proj, patch_idx, col, axis=-1)
 
@@ -343,7 +343,8 @@ class HarmonicBundle:
         return F
 
     def curvature_form_fn(self, p, pb, params):
-        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
+        # F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
+        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_twist_V_DKLR)
         ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
         return F_V + ddbar_h
@@ -415,8 +416,8 @@ class HarmonicBundle:
         #ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         #ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
         # F = self.curvature_correction(p, pb, params)
-        # F = self.curvature_form_fn(p, pb, params)
-        F = self.curvature_form(p, pb, params)
+        F = self.curvature_form_fn(p, pb, params)
+        # F = self.curvature_form(p, pb, params)
         Tr_eta = jnp.einsum("...aaij->...ij", F)
 
         return Tr_eta
@@ -449,12 +450,12 @@ class HarmonicBundle:
     def objective_function(self, data, params):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        # codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
-        # codiff = jnp.squeeze(codiff)
+        #codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
+        #codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
-        # loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
+        #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
         loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form, self._metric_fn,
-                                                       self.section_metric_network)
+                                                       self.section_metric_network, self.rank_V)
         return loss
 
     def section_metric_network(self, p, params, activation=nn.gelu):
@@ -505,6 +506,11 @@ class HarmonicBundle:
         
         return H_fs_V + C * sym_update
 
+    def fubini_study_metric_twist_V_DKLR(self, p):
+        tsb = self.twisted_section_basis_DKLR(p)
+        fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
+        fs = jnp.linalg.inv(fs_inv)
+        return fs
 
     def endomorphism_network(self, p, params, activation=nn.gelu):
         r"""
@@ -516,26 +522,23 @@ class HarmonicBundle:
         # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
         # TODO
-        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self.N_sb)
-        emb = self.embedding_matrix(p)
-        H_fs_V = self.fubini_study_metric_V(p)
+        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+        tsb = self.twisted_section_basis_DKLR(p)
+        H_fs_V = self.fubini_study_metric_twist_V_DKLR(p)
 
-        sb = self.section_basis_V(p)
-        sb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(sb))
-        h = jnp.einsum("...am, ...mn, ...bn->...ab", sb, coeffs, sb_dual)
+        tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
+        h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
         return h
 
-    def loss_breakdown(self, data, params, bundle_metric_fn=None):
+    def loss_breakdown(self, data, params):
         
         loss = self.objective_function(data, params)
 
         p, pbs, w = data
-        if bundle_metric_fn is not None:
-            H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
 
         h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
 
-        #h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
+        # h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
         F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
@@ -547,7 +550,7 @@ class HarmonicBundle:
         g_tr_F = vmap(jnp.trace)(g_tr_F)
 
         return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
-                'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega}
+                'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega}
 
     def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
         
