@@ -450,12 +450,12 @@ class HarmonicBundle:
     def objective_function(self, data, params):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        #codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
-        #codiff = jnp.squeeze(codiff)
+        codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
+        codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
-        #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
-        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form, self._metric_fn,
-                                                       self.section_metric_network, self.rank_V)
+        loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
+        #loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form, self._metric_fn,
+        #                                               self.section_metric_network, self.rank_V)
         return loss
 
     def section_metric_network(self, p, params, activation=nn.gelu):
@@ -522,7 +522,7 @@ class HarmonicBundle:
         # return jnp.einsum("...ca, ...bc->...ab", jnp.linalg.inv(H_fs_V), H)
 
         # TODO
-        coeffs = models.cholesky_head(params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
         tsb = self.twisted_section_basis_DKLR(p)
         H_fs_V = self.fubini_study_metric_twist_V_DKLR(p)
 
@@ -540,8 +540,8 @@ class HarmonicBundle:
 
         # h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
-        F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
-        # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
+        # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
+        F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
@@ -618,7 +618,7 @@ class HarmonicBundle:
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        self.n_units_harmonic = [32,32,32,32] #[48,48,48] 
+        self.n_units_harmonic = [32,32,32] #[48,48,48] 
         # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         # k = 1
         # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
@@ -661,7 +661,7 @@ class HarmonicBundle:
                     wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
 
                     if t % self.eval_interval_t == 0:
-                        storage["train_loss"].append(loss)
+                        storage["train_loss"].append(loss.item())
                     # global_step += 1
                     # if global_step > 20: break
 
