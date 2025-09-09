@@ -430,32 +430,32 @@ class HarmonicBundle:
     @partial(jax.jit, static_argnums=(0,))
     def codifferential_TrF(self, p, pb, params):
 
-        # g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
-        # TrF = self.TrF_correction(p, pb, params)
-        # del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
-        # del_z_TrF = jnp.einsum("...iju, ...ku->...ijk", del_z_TrF, pb)
+        g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
+        TrF = self.TrF_correction(p, pb, params)
+        del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
+        del_z_TrF = jnp.einsum("...iju, ...ku->...ijk", del_z_TrF, pb)
 
-        # Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
-        # _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
-        # covariant_derivative_eta = del_z_TrF - _cov2
-        # covariant_derivative_eta = del_z_TrF
-        # codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
-        # return codiff
-
-        del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
-        codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
+        Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
+        _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
+        covariant_derivative_eta = del_z_TrF - _cov2
+        covariant_derivative_eta = del_z_TrF
+        codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
         return codiff
+
+        # del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
+        # codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
+        # return codiff
 
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params):
-        (p, pb, w) = data
-        vol_Omega = jnp.mean(w)
-        codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
-        codiff = jnp.squeeze(codiff)
+        #(p, pb, w) = data
+        #vol_Omega = jnp.mean(w)
+        #codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
+        #codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
-        loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
-        #loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form, self._metric_fn,
-        #                                               self.section_metric_network, self.rank_V)
+        #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
+        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_form_fn, self._metric_fn,
+                                                       self.section_metric_network, self.rank_V)
         return loss
 
     def section_metric_network(self, p, params, activation=nn.gelu):
@@ -536,9 +536,9 @@ class HarmonicBundle:
 
         p, pbs, w = data
 
-        h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
+        # h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
 
-        # h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
+        h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
         # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
         F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
@@ -554,9 +554,6 @@ class HarmonicBundle:
 
     def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
         
-        #loss_breakdown_dict = hym.loss_breakdown(
-        #   val_data, params, self.curvature_form, self._metric_fn, self.section_metric_network, 
-        #   d = self.rank_V, slope = slope)
         loss_breakdown_dict = self.loss_breakdown(val_data, params)
         loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
         summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
