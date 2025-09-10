@@ -540,6 +540,11 @@ class HarmonicBundle:
         s, logdet = jnp.linalg.slogdet(H_0)
         return logdet + 1j * jnp.pi * (s < 0)
 
+    def H0_conformal_change(self, p, params):
+        f = self.conformal_rescale_network(p, params)
+        H0 = self.fubini_study_metric_twist_V_DKLR(p)
+        return jnp.expand_dims(jnp.exp(f), (1,2)) * H0
+
     def fubini_study_metric_twist_V_DKLR(self, p):
         tsb = self.twisted_section_basis_DKLR(p)
         fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
