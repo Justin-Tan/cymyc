@@ -102,6 +102,7 @@ class HarmonicBundle:
                                                                                    monomials_B, monomials_C)
         
         self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
+        self.activation = nn.gelu
 
         _monad_map = [v for v in variables[:4]]
         self.monad_map_power_matrix_DKLR = poly_utils.monomials_to_power_matrix(_monad_map, variables)
@@ -458,7 +459,11 @@ class HarmonicBundle:
                                                        self.section_metric_network, self.rank_V)
         return loss
 
-    def section_metric_network(self, p, params, activation=nn.gelu):
+    def conformal_rescale_network(self, p, params):
+        f = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), activation=self.activation)
+        return f
+
+    def section_metric_network(self, p, params):
         r"""
         Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
         """
@@ -491,20 +496,49 @@ class HarmonicBundle:
         G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
         return jnp.linalg.inv(G_inv)
 
-        emb = self.embedding_matrix(p)
-        A = jnp.conjugate(emb) @ jnp.einsum("...ij->...ji", emb)
-        A_inv = jnp.linalg.inv(A)
-        sv = jnp.einsum("...ji, ...ja->...ia", A_inv, sv)
+    def conformal_change(self, p, pb, params):
+        xi = self.TrF_H_0(p, pb)
+        ddbar_f = self.del_z_del_z_bar(p, self.conformal_rescale_network, params)
+        ddbar_f = jnp.einsum("...iu, ...uv, ...jv->...ij", pb, ddbar_f, jnp.conjugate(pb))
+        return xi + self.rank_V * ddbar_f
 
-        dual_sv = jnp.einsum("...ab, ...bi->...ai", H_fs_V, jnp.conjugate(sv))
-        sv_outer_sv = jnp.einsum("...ai, ...bj->...ijab", dual_sv, jnp.conjugate(dual_sv))
-        
-        sym_update = sv_outer_sv + jnp.einsum("...ijab->...ijba", jnp.conjugate(sv_outer_sv))
-        sym_update = jnp.einsum("...ij, ...ijab->...ab", coeffs, sym_update)
-        # return sym_update
-        # sym_update = sym_update + jnp.einsum("...ab->...ba", jnp.conjugate(sym_update))
-        
-        return H_fs_V + C * sym_update
+    @partial(jax.jit, static_argnums=(0,))
+    def codifferential_TrF_conformal(self, p, pb, params):
+
+        g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
+        TrF = self.conformal_change(p, pb, params)
+        del_z_TrF = curvature.del_z(p, self.conformal_change, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
+        del_z_TrF = jnp.einsum("...iju, ...ku->...ijk", del_z_TrF, pb)
+
+        Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
+        _cov2 = jnp.einsum('...akb, ...av -> ...bvk', Gamma_holo, TrF)   # [b, \bar{\nu}, \kappa]
+        covariant_derivative_eta = del_z_TrF - _cov2
+        covariant_derivative_eta = del_z_TrF
+        codiff = jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
+        return codiff
+
+    @partial(jax.jit, static_argnums=(0,))
+    def objective_function_conformal(self, data, params):
+        (p, pb, w) = data
+        vol_Omega = jnp.mean(w)
+        codiff = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None))(p, pb, params)
+        codiff = jnp.squeeze(codiff)
+        # g_pred = vmap(self.metric_fn)(p)
+        loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
+        return loss
+
+    def TrF_H_0(self, p, pb):
+        F_H_0 = hym._curvature_form_V(p, pb, self.fubini_study_metric_twist_V_DKLR)
+        return jnp.einsum("...aaij->...ij", F_H_0)
+    
+    def ddbar_log_det_H_0(self, p, pb):
+        hess = self.del_z_del_z_bar(p, self.log_det_H_0)
+        return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
+
+    def log_det_H_0(self, p):
+        H_0 = self.fubini_study_metric_twist_V_DKLR(p)
+        s, logdet = jnp.linalg.slogdet(H_0)
+        return logdet + 1j * jnp.pi * (s < 0)
 
     def fubini_study_metric_twist_V_DKLR(self, p):
         tsb = self.twisted_section_basis_DKLR(p)
@@ -533,11 +567,9 @@ class HarmonicBundle:
     def loss_breakdown(self, data, params):
         
         loss = self.objective_function(data, params)
-
         p, pbs, w = data
 
         # h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
-
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
         # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
@@ -552,9 +584,32 @@ class HarmonicBundle:
         return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega}
 
-    def callback(self, val_data, params, storage, logger, epoch, t0, slope: float = None):
+    def loss_breakdown_conformal(self, data, params):
         
-        loss_breakdown_dict = self.loss_breakdown(val_data, params)
+        loss = self.objective_function_conformal(data, params)
+        p, pb, w = data
+        f = vmap(self.conformal_rescale_network, in_axes=(0,None))(p, params)
+        H0 = vmap(self.fubini_study_metric_twist_V_DKLR)(p)
+        H = jnp.exp(f) * H0
+        g = vmap(self._metric_fn)(p)
+        g_inv = jnp.linalg.inv(g)
+        TrF = vmap(self.conformal_change, in_axes=(0,0,None))(p, pb, params)
+        TrF_H0 = vmap(self.TrF_H_0)(p, pb)
+        Lambda_TrF = jnp.einsum("...vu, ...uv->... ", g_inv, TrF)
+        Lambda_TrF_H0 = jnp.einsum("...vu, ...uv->... ", g_inv, TrF_H0)
+        vol_Omega = jnp.mean(w)
+
+        return {'loss': loss, 'f avg': jnp.mean(w * f) / vol_Omega, "Λ Tr F": jnp.mean(w * Lambda_TrF) / vol_Omega,
+                'Λ Tr F_H0': jnp.mean(w * Lambda_TrF_H0) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega}
+
+    def callback(self, val_data, params, storage, logger, epoch, t0, conformal_train=False,
+                 slope: float = None):
+        
+        if conformal_train is True:
+            loss_breakdown_dict = self.loss_breakdown_conformal(val_data, params)
+        else:
+            loss_breakdown_dict = self.loss_breakdown(val_data, params)
+
         loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
         summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
 
@@ -628,8 +683,6 @@ class HarmonicBundle:
         _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
 
-        # print('Input kernel shape', _params['layers_0']['kernel'].shape)
-
         t0 = time.time()
         with jax.default_device(device):
             for epoch in range(epochs):
@@ -661,6 +714,89 @@ class HarmonicBundle:
                         storage["train_loss"].append(loss.item())
                     # global_step += 1
                     # if global_step > 20: break
+
+                if epoch % self.save_interval == 0:
+                    utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
+
+        utils.basic_ckpt(_params, _opt_state, self.name, 'FIN')
+        utils.save_logs(storage, self.name, 'FIN')
+        return _params, storage
+
+
+    def fit_conformal(self, metric_fn, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
+            shuffle_rng = np.random.default_rng(), name=None):
+        from datetime import datetime
+
+        self._metric_fn = metric_fn
+        self.name = f"HYM_conformal_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
+        self.eval_interval = 1  # epochs
+        self.save_interval = 8
+        self.eval_interval_t = 512  # iterations
+
+        storage = defaultdict(list)
+        logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
+        data_path = os.path.join(data_path, 'dataset.npz')
+        os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
+        # cmd_args.metadata_path = os.path.join(cmd_args.dataset, 'metadata.pkl')
+
+        A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
+            batch_size, logger=logger)
+        dataset_size = A_train[0].shape[0]
+
+        # Normalize slope
+        vol = jnp.mean(A_train[1])
+        if self._slope is not None: self._slope *= vol
+
+        try:
+            device = jax.devices('gpu')[0]
+        except:
+            print("gpu not detected, falling back to cpu.")
+            device = jax.devices('cpu')[0]
+
+        # optimisation stuff - separate later
+        key = jax.random.key(42)
+        key, _k = jax.random.split(key)
+
+        grad_threshold = 1.
+        _tx = optax.chain(
+          optax.clip(grad_threshold),
+          optax.adamw(learning_rate=lr),
+        )
+        self.n_units = [48,48,48] 
+        model_class = models.LearnedVector_spectral_nn
+        model = model_class(self.n_homo_coords, self.ambient, self.n_units)
+
+        _params, _opt_state, _ = create_train_state(_k, model, _tx, data_dim=self.n_homo_coords * 2)
+
+        t0 = time.time()
+        with jax.default_device(device):
+            for epoch in range(epochs):
+
+                if epoch % self.eval_interval == 0: 
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                    p, w, _ = val_data
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                    val_data = (p, pb, w)
+                    storage = self.callback(
+                        val_data, _params, storage, logger, epoch, t0, self._slope, conformal_train=True)
+
+                if epoch > 0: 
+                    train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
+
+                wrapped_train_loader = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
+                                            colour='green', mininterval=0.1)
+
+                for t, data in enumerate(wrapped_train_loader):
+                    p, w, _ = data
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                    data = (p, pb, w)
+
+                    _params, _opt_state, loss = hym._train_step(data, _params, _opt_state, _tx, 
+                                                                self.objective_function_conformal)
+                    wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
+
+                    if t % self.eval_interval_t == 0:
+                        storage["train_loss"].append(loss.item())
 
                 if epoch % self.save_interval == 0:
                     utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
