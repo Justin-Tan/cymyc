@@ -590,7 +590,7 @@ class HarmonicBundle:
         p, pb, w = data
         f = vmap(self.conformal_rescale_network, in_axes=(0,None))(p, params)
         H0 = vmap(self.fubini_study_metric_twist_V_DKLR)(p)
-        H = jnp.exp(f) * H0
+        H = jnp.expand_dims(jnp.exp(f), (1,2)) * H0
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
         TrF = vmap(self.conformal_change, in_axes=(0,0,None))(p, pb, params)
@@ -602,8 +602,8 @@ class HarmonicBundle:
         return {'loss': loss, 'f avg': jnp.mean(w * f) / vol_Omega, "Λ Tr F": jnp.mean(w * Lambda_TrF) / vol_Omega,
                 'Λ Tr F_H0': jnp.mean(w * Lambda_TrF_H0) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega}
 
-    def callback(self, val_data, params, storage, logger, epoch, t0, conformal_train=False,
-                 slope: float = None):
+    def callback(self, val_data, params, storage, logger, epoch, t0,
+                 slope: float = None, conformal_train=False):
         
         if conformal_train is True:
             loss_breakdown_dict = self.loss_breakdown_conformal(val_data, params)
