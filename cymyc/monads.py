@@ -528,10 +528,12 @@ class HarmonicBundle:
 		H0 = self.fubini_study_metric_twist_V_DKLR(p)
 		return jnp.expand_dims(jnp.exp(f), (1,2)) * H0
 
-	def embedding_matrix_DKLR(self, p, patch_idx):
+	def embedding_matrix_DKLR(self, p, patch_idx=None):
 		r"""
 		Describes embedding $\iota: V \righthookarrow B$.
 		"""
+		if patch_idx is None:
+			patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
 		proj = jnp.eye(self.rank_V, dtype=self.cdtype)
 		f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_DKLR)
 		col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
@@ -543,7 +545,7 @@ class HarmonicBundle:
 		Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
 		expressed in a local frame - typically Z_i^k. 
 		"""
-		patch_idx = 0 #jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])  
+		patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])  
 		Ok_powers = self.mb1
 		Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
 		blocks = [Ok_monomials] * self.rank_B
