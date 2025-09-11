@@ -263,32 +263,6 @@ class HarmonicBundle:
 	
 		return embedding_matrix @ section_matrix
 
-	def embedding_matrix_DKLR(self, p, patch_idx):
-		r"""
-		Describes embedding $\iota: V \righthookarrow B$.
-		"""
-		proj = jnp.eye(self.rank_V, dtype=self.cdtype)
-		f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_DKLR)
-		col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
-		col = jnp.delete(col, patch_idx, assume_unique_indices=True)
-		return jnp.insert(proj, patch_idx, col, axis=-1)
-
-	def twisted_section_basis_DKLR(self, p):
-		r"""
-		Holomorphic sections of twisted dual bundle $V^{\vee} \otimes O_X(k)$,
-		expressed in a local frame - typically Z_i^k. 
-		"""
-		patch_idx = 1 #jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])  
-		Ok_powers = self.mb1
-		Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
-		blocks = [Ok_monomials] * self.rank_B
-		section_matrix = jax.scipy.linalg.block_diag(*blocks)
-		embedding_matrix = self.embedding_matrix_DKLR(p, patch_idx)
-		section_matrix = jnp.delete(section_matrix, 
-									self.n_linear * patch_idx + patch_idx, axis=-1, 
-									assume_unique_indices=True)
-		# return jnp.delete(embedding_matrix @ section_matrix, 0, axis=1, assume_unique_indices=True)
-		return embedding_matrix @ section_matrix
 
 	@partial(jax.jit, static_argnums=(0,))
 	def H1XV_representatives(self, p):
@@ -350,7 +324,10 @@ class HarmonicBundle:
 	def curvature_form_fn(self, p, pb, params):
 		# F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
 		F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_twist_V_DKLR)
-		ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
+		# ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
+		ddbar_h = self.del_z_del_z_bar(p, self._endomorphism_network, params)
+		emb = self.embedding_matrix_DKLR(p)
+		ddbar_h = jnp.einsum("...xa, ...abuv, ...yb->...xyuv", emb, ddbar_h, emb)
 		ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
 		return F_V + ddbar_h
 
@@ -551,11 +528,49 @@ class HarmonicBundle:
 		H0 = self.fubini_study_metric_twist_V_DKLR(p)
 		return jnp.expand_dims(jnp.exp(f), (1,2)) * H0
 
-	def fubini_study_metric_twist_V_DKLR(self, p):
-		tsb = self.twisted_section_basis_DKLR(p)
+	def embedding_matrix_DKLR(self, p, patch_idx):
+		r"""
+		Describes embedding $\iota: V \righthookarrow B$.
+		"""
+		proj = jnp.eye(self.rank_V, dtype=self.cdtype)
+		f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_DKLR)
+		col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
+		col = jnp.delete(col, patch_idx, assume_unique_indices=True)
+		return jnp.insert(proj, patch_idx, col, axis=-1)
+
+	def twisted_section_basis_DKLR(self, p, ambient=False):
+		r"""
+		Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
+		expressed in a local frame - typically Z_i^k. 
+		"""
+		patch_idx = 0 #jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])  
+		Ok_powers = self.mb1
+		Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
+		blocks = [Ok_monomials] * self.rank_B
+		section_matrix = jax.scipy.linalg.block_diag(*blocks)
+		section_matrix = jnp.delete(section_matrix, 
+									self.n_linear * patch_idx + patch_idx, axis=-1, 
+									assume_unique_indices=True)
+		if ambient is True: return section_matrix
+		embedding_matrix = self.embedding_matrix_DKLR(p, patch_idx)
+		return embedding_matrix @ section_matrix
+
+	def fubini_study_metric_twist_V_DKLR(self, p, ambient=False):
+		tsb = self.twisted_section_basis_DKLR(p, ambient)
 		fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
 		fs = jnp.linalg.inv(fs_inv)
 		return fs
+
+	def _endomorphism_network(self, p, params, activation=nn.gelu):
+		# TODO
+		coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+		tsb = self.twisted_section_basis_DKLR(p, ambient=True)
+		H_fs_V = self.fubini_study_metric_twist_V_DKLR(p, ambient=True)
+
+		tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
+		h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+		return h
+	
 
 	def endomorphism_network(self, p, params, activation=nn.gelu):
 		r"""
