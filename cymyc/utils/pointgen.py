@@ -166,6 +166,7 @@ if __name__ == "__main__":
     def keep_patch(p, patch):
         m = jnp.argmax(jnp.abs(p), axis=-1)
         return p[m == patch]
+        # return p[jnp.logical_or(m == patch, m == 0)]
 
     if args.patch is not None:
         _p = keep_patch(p, args.patch)
