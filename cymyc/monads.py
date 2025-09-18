@@ -147,6 +147,28 @@ class HarmonicBundle:
     def dagger(A):
         return jnp.einsum("...ab->...ba", jnp.conjugate(A))
 
+    @partial(jax.jit, static_argnums=(0,2))
+    def connection_form_V(self, p, H_fn, params=None):
+        if params is None:
+            H = H_fn(p)
+            del_H = curvature.del_z(p, H_fn)
+        else:
+            H = H_fn(p, params)
+            del_H = curvature.del_z(p, H_fn, False, params)
+        H_inv = jnp.linalg.inv(H)  # \bar{a} b
+        pb = self.pb_fn(math_utils.to_complex(p))
+        del_H = jnp.einsum("...abu,...iu->...abi", del_H, pb)
+        A = jnp.einsum("...bc, ...abi->...cai", H_inv, del_H)  # A^c_{ai}
+        return A
+
+    @partial(jax.jit, static_argnums=(0,2))
+    def curvature_form_V(self, p, H_fn, params=None):
+        F = curvature.del_bar_z(p, self.connection_form_V, False, H_fn, 
+                                params)
+        pb = self.pb_fn(math_utils.to_complex(p))
+        F = jnp.einsum("...abiu, ...ju->...abij", F, jnp.conjugate(pb))
+        return F
+
     def fubini_study_metric_B(self, p, cdtype=np.complex64):
         r"""FS reference metric on a direct sum of line bundles, e.g. on 
         bundle $B$.
@@ -315,24 +337,23 @@ class HarmonicBundle:
             n += B
         return kappa
 
-    def connection_form(self, p, pb, params):
-        A = hym.connection_form_V(p, pb, self.section_metric_network, params)
+    def connection_form(self, p, params):
+        A = self.connection_form_V(p, self.section_metric_network, params)
         return A
 
     @partial(jax.jit, static_argnums=(0,))
-    def curvature_form(self, p, pb, params):
-        F = hym.curvature_form_V(p, pb, self.section_metric_network, params)
+    def curvature_form(self, p, params):
+        F = self.curvature_form_V(p, self.section_metric_network, params)
         return F
 
     def curvature_form_fn(self, p, pb, params):
-        # F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
-        F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_twist_V_DKLR)
+        F_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
         ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         #ddbar_h = self.del_z_del_z_bar(p, self._endomorphism_network, params)
         #emb = self.embedding_matrix_DKLR(p)
         #ddbar_h = jnp.einsum("...xa, ...abuv, ...yb->...xyuv", emb, ddbar_h, emb)
         ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        return F_V + ddbar_h
+        return F_0 + ddbar_h
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction(self, p, pb, params):
@@ -412,6 +433,7 @@ class HarmonicBundle:
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         return jnp.einsum("...vu, ...uv->...", g_inv, Tr_eta)
 
+
     @partial(jax.jit, static_argnums=(0,))
     def codifferential_TrF(self, p, pb, params):
 
@@ -426,9 +448,6 @@ class HarmonicBundle:
         codiff = -jnp.einsum('...vu, ...bvu->...b', g_inv, covariant_derivative_eta)
         return codiff
 
-        # del_z_contraction = curvature.del_z(p, self.contract_TrF, False, pb, params)
-        # codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
-        # return codiff
 
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params):
@@ -480,13 +499,12 @@ class HarmonicBundle:
         return jnp.linalg.inv(G_inv)
 
     def conformal_change(self, p, params):
-        C = self.rank_V
         pb = self.pb_fn(math_utils.to_complex(p))
-        xi = self.TrF_H_0(p, pb)
+        xi = self.TrF_H_0(p)
         # xi = curvature.ricci_form_kahler(p, self.fs_metric_fn, pb)
         ddbar_f = self.del_z_del_z_bar(p, self.conformal_rescale_network, params)
         ddbar_f = jnp.einsum("...iu, ...uv, ...jv->...ij", pb, ddbar_f, jnp.conjugate(pb))
-        return xi + C * ddbar_f
+        return xi + self.rank_V * ddbar_f
 
     @partial(jax.jit, static_argnums=(0,))
     def codifferential_TrF_conformal(self, p, pb, params):
@@ -503,7 +521,7 @@ class HarmonicBundle:
         return -codiff
 
     @partial(jax.jit, static_argnums=(0,))
-    def objective_function_conformal(self, data, params, clip_percentile=None, MAX_NORM=20.):
+    def objective_function_conformal(self, data, params, MAX_NORM=20.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None))(p, pb, params)
@@ -515,37 +533,31 @@ class HarmonicBundle:
         #     jnp.einsum("...vu, ...u, ...v", g_inv, codiff, jnp.conj(codiff)))
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1)
         abs_codiff = jnp.where(abs_codiff < MAX_NORM, abs_codiff, 0.)
-        # scale = jax.lax.stop_gradient(jnp.median(abs_codiff) + eps)
-
-        #if clip_percentile is not None:
-        #    cap = jnp.percentile(jax.lax.stop_gradient(abs_codiff), clip_percentile)
-        #    cap = jax.lax.stop_gradient(cap)
-        #    abs_codiff = jnp.minimum(abs_codiff, cap)
         
         loss = jnp.mean(abs_codiff * w) / vol_Omega
         #loss = hym.objective_function_implicit_slope(data, params,
         #        self.conformal_change, self._metric_fn)
         return loss
 
-    def _contract_TrF(self, p, pb, params):
+    def _contract_TrF(self, p, params):
         eta = self.conformal_change(p, params)
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         return jnp.einsum("...vu, ...uv->...", g_inv, eta)
 
-    def _contract_TrF_H0(self, p, pb):
-        eta = self.TrF_H_0(p, pb)
+    def _contract_TrF_H0(self, p):
+        eta = self.TrF_H_0(p)
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         return jnp.einsum("...vu, ...uv->...", g_inv, eta)
 
     @partial(jax.jit, static_argnums=(0,))
     def _codifferential_TrF_conformal(self, p, pb, params):
 
-        del_z_contraction = curvature.del_z(p, self._contract_TrF, False, pb, params)
+        del_z_contraction = curvature.del_z(p, self._contract_TrF, False, params)
         codiff = jnp.einsum("...u, ...iu->...i", del_z_contraction, pb)
         return codiff
 
-    def TrF_H_0(self, p, pb):
-        F_H_0 = hym._curvature_form_V(p, pb, self.fubini_study_metric_twist_V_DKLR)
+    def TrF_H_0(self, p):
+        F_H_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
         return jnp.einsum("...aaij->...ij", F_H_0)
     
     def ddbar_log_det_H_0(self, p, pb):
@@ -597,18 +609,6 @@ class HarmonicBundle:
         if ambient is True: return section_matrix
         embedding_matrix = self.embedding_matrix_DKLR(p, patch_idx)
         return embedding_matrix @ section_matrix
-
-    @staticmethod
-    def _twisted_section_basis_DKLR(p):
-        p_c = math_utils.to_complex(p)
-        blocks = [p_c] * 3
-        section_matrix = jax.scipy.linalg.block_diag(*blocks)
-        i, j = 1, 5
-        row1 = p[i:j] * p[1]
-        row2 = p[i:j] * p[2]
-        row3 = p[i:j] * p[3]
-        mat = -jnp.vstack((row1,row2,row3))
-        return jnp.hstack((section_matrix, mat))
 
     def fubini_study_metric_twist_V_DKLR(self, p, ambient=False):
         tsb = self.twisted_section_basis_DKLR(p)
@@ -679,14 +679,13 @@ class HarmonicBundle:
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
 
-        k = 4096
-        codiff = vmap(self._codifferential_TrF_conformal, in_axes=(0,0,None))(p[:k], pb[:k], params)
+        codiff = vmap(self._codifferential_TrF_conformal, in_axes=(0,0,None))(p, pb, params)
         codiff_norm = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1))
         # codiff_norm = jnp.einsum("...vu, ...u, ...v", g_inv[:k], codiff, jnp.conj(codiff))
         var = hym.objective_function_implicit_slope(data, params, self.conformal_change, self._metric_fn)
 
         TrF = vmap(self.conformal_change, in_axes=(0,None))(p, params)
-        TrF_H0 = vmap(self.TrF_H_0)(p, pb)
+        TrF_H0 = vmap(self.TrF_H_0)(p)
         Lambda_TrF = jnp.einsum("...vu, ...uv->... ", g_inv, TrF)
         Lambda_TrF_H0 = jnp.einsum("...vu, ...uv->... ", g_inv, TrF_H0)
         vol_Omega = jnp.mean(w)
@@ -736,7 +735,6 @@ class HarmonicBundle:
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
         os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
-        # cmd_args.metadata_path = os.path.join(cmd_args.dataset, 'metadata.pkl')
 
         A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
             batch_size, logger=logger)
@@ -755,8 +753,6 @@ class HarmonicBundle:
         # optimisation stuff - separate later
         key = jax.random.key(42)
         key, _k = jax.random.split(key)
-
-        # _tx = optax.adamw(lr)
 
         grad_threshold = 1.
         _tx = optax.chain(
@@ -794,7 +790,6 @@ class HarmonicBundle:
                 wrapped_train_loader = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
                                             colour='green', mininterval=0.1)
 
-                global_step = 0
                 for t, data in enumerate(wrapped_train_loader):
                     p, w, _ = data
                     pb = vmap(self.pb_fn)(math_utils.to_complex(p))
@@ -805,8 +800,6 @@ class HarmonicBundle:
 
                     if t % self.eval_interval_t == 0:
                         storage["train_loss"].append(loss.item())
-                    # global_step += 1
-                    # if global_step > 20: break
 
                 if epoch % self.save_interval == 0:
                     utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
@@ -829,7 +822,6 @@ class HarmonicBundle:
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
         os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
-        # cmd_args.metadata_path = os.path.join(cmd_args.dataset, 'metadata.pkl')
 
         A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
             batch_size, logger=logger)
@@ -937,8 +929,8 @@ class HarmonicBundle:
         return G
 
     @partial(jax.jit, static_argnums=(0,))
-    def curvature_form_donaldson(self, p, pb, H):
-        F = hym.curvature_form_V(p, pb, self.fibre_metric_from_H, H)
+    def curvature_form_donaldson(self, p, H):
+        F = self.curvature_form_V(p, self.fibre_metric_from_H, H)
         return F
 
     def donaldson_step(self, key, H, n_batches, batch_size):
