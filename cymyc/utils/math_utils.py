@@ -203,6 +203,11 @@ def rescale(x):
     x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)    
     return x, m
 
+def rescale_patch(x, patch):
+    m = jnp.ones(x.shape[0], dtype=int) * patch
+    x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)
+    return x
+
 def S2np1_uniform(key, n_p, n):
     """
     Sample `n_p` points uniformly on $S^{2n+1}$, treated as CP^n

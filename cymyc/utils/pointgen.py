@@ -61,7 +61,7 @@ def univariate_coefficient_data(cy_dim, monomials, coefficients):
     return t_coeffs_data, generators
 
 # @partial(jit, static_argnums=(3,))
-def root_solver(p, q, t_coeffs_data, t_generators):
+def root_solver(p, q, t_coeffs_data, t_generators, device=cpu_device):
 
     pq = jnp.concatenate([p,q], axis=-1)
     assert pq.shape[-1] == len(t_generators)
@@ -75,7 +75,7 @@ def root_solver(p, q, t_coeffs_data, t_generators):
     t_coeffs = jnp.array(t_coeffs)
 
     # Bezout's theorem says this returns `c_dim` intersection points
-    with jax.default_device(cpu_device):
+    with jax.default_device(device):
         t_roots = jnp.roots(t_coeffs, strip_zeros=False)
     pts = p + jnp.expand_dims(t_roots, 1) * q
     return pts, t_coeffs
@@ -105,8 +105,6 @@ def sample_intersect_hypersurface(key: random.PRNGKey, n_p: int,
     pts, t_coeffs = vmap(root_solver, in_axes=(0,0,None,None))(
         p, q, t_coeffs_data.values(), tuple(generators))
     pts = pts.reshape(-1, c_dim)
-    abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(pts, 
-                    monomials, coefficients))
 
     # recall Bezout's theorem guarantees `c_dim` intersecting points
     # rescale points - return homogeneous coords with $\max{|z_i|} = 1$
@@ -168,13 +166,25 @@ if __name__ == "__main__":
         return p[m == patch]
         # return p[jnp.logical_or(m == patch, m == 0)]
 
+    def rescale(x, patch):
+        m = jnp.ones(x.shape[0], dtype=int) * patch
+        x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)
+        return x
+
+    def check_min(p, patch, threshold=1e-1):
+        mask = jnp.abs(p)[:,patch] > threshold
+        return rescale(p[mask], patch)
+
     if args.patch is not None:
-        _p = keep_patch(p, args.patch)
+        _p = check_min(p, args.patch)
         out, total = [_p], _p.shape[0]
         while total < (n_p + v_p):
-            _p = sample_intersect_hypersurface(key, int(n_coords * (n_p + v_p - total)) + v_p, 
+            _p = sample_intersect_hypersurface(key, int(1.1 * (n_p + v_p - total)) + v_p, 
                     cy_dim, monomials, coefficients)
-            _p = keep_patch(_p, args.patch)
+            _p = check_min(_p, args.patch)
+            abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(_p,
+                monomials, coefficients)).max()
+            print(f'Max locus violation: {abs_poly_val:.7e}')
             total += _p.shape[0]
             out.append(_p)
             print(f'Points in patch {args.patch} accumulated:', total)
@@ -234,13 +244,13 @@ if __name__ == "__main__":
         p_train, p_val = np.array_split(p, (n_p,))
         w_train, w_val = np.array_split(weights, (n_p,))
         dVol_Omega_train, dVol_Omega_val = np.array_split(dVol_Omegas, (n_p,))
-        # pb_train, pb_val = np.array_split(pullbacks, (n_p,))
+        pb_train, pb_val = np.array_split(pullbacks, (n_p,))
 
         y_train = np.stack((w_train, dVol_Omega_train), axis=-1)
         y_val = np.stack((w_val, dVol_Omega_val), axis=-1)
 
         np.savez_compressed(f, x_train=p_train, y_train=y_train, x_val=p_val, 
-                            y_val=y_val, # pb_train=pb_train, pb_val=pb_val, 
+                            y_val=y_val, pb_train=pb_train, pb_val=pb_val, 
                             kappa=kappa, vol_g=vol_g, vol_Omega=vol_Omega,
                             psi=psi)
         

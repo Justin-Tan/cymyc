@@ -89,9 +89,11 @@ def objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn
     """
     p, pbs, w = data
     g = vmap(metric_fn)(p)  # frozen params
-    F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    # F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    F = vmap(curvature_form_fn, in_axes=(0, None))(p, params)
 
-    g_tr_F = -jnp.real(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))
+    # g_tr_F = -jnp.real(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))
+    g_tr_F = jnp.abs(jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), F))
     vol_Omega = jnp.mean(w)
     # return ((w*(g_tr_F**2)).sum() / w.sum()) - (w*g_tr_F).sum()**2 / w.sum()**2
     return jnp.mean(w * (g_tr_F**2)) / vol_Omega - 1./d * jnp.mean(w * g_tr_F)**2 / vol_Omega**2

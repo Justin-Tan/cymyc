@@ -283,7 +283,7 @@ def ricci_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array
     
     return ricci_tensor
 
-@jit
+@partial(jit, static_argnums=(1,))
 def ricci_form_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
                       pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j"]:
     r""" Returns Ricci form $\rho$ on a Kähler manifold, with support for variety $\iota: X \hookrightarrow \mathbb{P}^n$. 
