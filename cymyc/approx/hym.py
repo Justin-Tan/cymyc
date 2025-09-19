@@ -117,14 +117,6 @@ def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_
 
     g_tr_F = jnp.einsum("...ji,...abij->...ab", jnp.linalg.inv(g), F)  # trace over base indices
 
-    #F_g_p = jnp.einsum("...ab, ...ac->...bc", g_tr_F, H)
-    #F_g_p = (F_g_p + jnp.einsum("...ij->...ji", F_g_p.conj()))/2 
-    #g_tr_F = jnp.einsum("...bc, ...ca->...ab", F_g_p, jnp.linalg.inv(H))
-    # det_F_g = jnp.abs(jnp.linalg.det(g_tr_F))
-    #return jnp.mean(w * det_F_g) / vol_Omega
-    # max_eig = vmap(jnp.linalg.norm)(g_tr_F)
-    # return jnp.mean(w * max_eig) / vol_Omega
-
     tr_F_g = vmap(jnp.trace)(g_tr_F)  # trace over fibre indices
     tr_F_g_2 = vmap(jnp.trace)(g_tr_F @ jnp.einsum("...ab->...ba", jnp.conj(g_tr_F)))
     tr_F_g_2 = jnp.abs(tr_F_g_2)

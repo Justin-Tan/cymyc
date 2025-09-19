@@ -347,20 +347,31 @@ class HarmonicBundle:
         return F
 
     def curvature_form_fn(self, p, pb, params):
-        F_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
+        F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
         ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
         #ddbar_h = self.del_z_del_z_bar(p, self._endomorphism_network, params)
         #emb = self.embedding_matrix_DKLR(p)
-        #ddbar_h = jnp.einsum("...xa, ...abuv, ...yb->...xyuv", emb, ddbar_h, emb)
         ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        return F_0 + ddbar_h
+        return F_H0 + ddbar_h
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction(self, p, pb, params):
-        F_0 = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
+        F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
         d_correction = curvature.del_bar_z(p, self.exact_piece, False, pb, params)
         d_correction = jnp.einsum("...abiu, ...ju->...abij", d_correction, jnp.conjugate(pb))
-        return F_0 + d_correction
+        return F_H0 + d_correction
+
+    def exact_piece(self, p, pb, params):
+        h = self.endomorphism_network(p, params)  # h^b_a
+        dh = curvature.del_z(p, self.endomorphism_network, False, params)  # h^b_{ai}
+        dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
+        A_0 = self.connection_form_V(p, self.fubini_study_metric_twist_V_DKLR)
+
+        _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
+        _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
+        holo_cov_der_h = dh + _A1 - _A2
+        exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
+        return exact
 
     def endomorphism_section(self, p, params):
         H = self.section_metric_network(p, params)
@@ -368,20 +379,6 @@ class HarmonicBundle:
         # h = jnp.einsum("...ac, ...cb->...ba", H, jnp.linalg.inv(H_0))
         h = jnp.einsum("...cb, ...ac->...ba", jnp.linalg.inv(H_0), H)
         return h  # h^b_a 
-
-    def exact_piece(self, p, pb, params):
-        h = self.endomorphism_network(p, params)  # h^b_a
-        dh = curvature.del_z(p, self.endomorphism_network, False, params)  # h^b_{ai}
-        dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
-        A_0 = hym.connection_form_V(p, pb, self.fubini_study_metric_V)
-
-        _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
-        _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
-        holo_cov_der_h = dh + _A1 - _A2
-        #exact = jnp.einsum("...abi, ...bc->...aci", holo_cov_der_h, jnp.linalg.inv(h))
-        exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
-        
-        return exact
 
     def _section_basis_V(self, p):
         r"""
@@ -572,7 +569,7 @@ class HarmonicBundle:
     def H0_conformal_change(self, p, params):
         f = self.conformal_rescale_network(p, params)
         H0 = self.fubini_study_metric_twist_V_DKLR(p)
-        return jnp.expand_dims(jnp.exp(f), (1,2)) * H0
+        return jnp.expand_dims(jnp.exp(f), (0,1)) * H0
 
     def embedding_matrix_DKLR(self, p, patch_idx=None):
         r"""
@@ -627,7 +624,7 @@ class HarmonicBundle:
         return h
     
 
-    def endomorphism_network(self, p, params, activation=nn.gelu):
+    def endomorphism_network(self, p, params):
         r"""
         blah
         """
