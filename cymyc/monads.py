@@ -461,7 +461,7 @@ class HarmonicBundle:
         #codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
         #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
-        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_correction_conformal, 
+        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_correction, 
                                                        self._metric_fn, self.section_metric_network, 
                                                        self.rank_V)
         return loss
@@ -628,6 +628,8 @@ class HarmonicBundle:
         $V$ tensored by a dual section.
         $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
         """
+        f = self.conformal_fn(p)
+        return jnp.eye(self.rank_V, dtype=self.cdtype) * jnp.exp(f)
         normalise_det = True
         # TODO
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
@@ -659,7 +661,7 @@ class HarmonicBundle:
         # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
-        F = vmap(self.curvature_correction_conformal, in_axes=(0,0,None))(p,
+        F = vmap(self.curvature_correction, in_axes=(0,0,None))(p,
                 pbs, params)
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
@@ -726,7 +728,7 @@ class HarmonicBundle:
         return params, opt_state, init_rng
     
     def fit(self, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
-            H0_conformal_fn = None, shuffle_rng = np.random.default_rng(), name = None):
+            conformal_fn = None, shuffle_rng = np.random.default_rng(), name = None):
         from datetime import datetime
 
         self.name = f"HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
@@ -763,7 +765,7 @@ class HarmonicBundle:
           optax.adamw(learning_rate=lr),
         )
         self.n_units_harmonic = [48,48,48]
-        if H0_conformal_fn is not None: self.H0_conformal_fn = H0_conformal_fn
+        if conformal_fn is not None: self.conformal_fn = conformal_fn
         # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         # k = 1
         # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
