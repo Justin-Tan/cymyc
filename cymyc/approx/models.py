@@ -222,12 +222,34 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         The dimension of the output square matrix.
     """
     matrix_dim: int = -1
+    normalise_det: bool = False
     cdtype: jnp.dtype = jnp.complex64
+
+    def postprocess(self, out):
+
+        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
+        diag_idx = jnp.diag_indices(self.matrix_dim)
+        
+        diag = out[:self.matrix_dim]
+        if self.normalise_det is True:
+            log_diag = diag - jnp.mean(diag)
+            diag = jnp.exp(log_diag)
+        else:
+            diag = nn.softplus(diag)
+            
+        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
+        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
+
+        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
+        L = L.at[diag_idx].set(diag)
+        L = L.at[tril_off_diag_idx].set(off_diag)
+        H = L @ jnp.conjugate(L).T
+        return (H + jnp.conjugate(H).T) / 2.
 
     @nn.compact
     def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
         """
-        Forward pass that outputs a complex lower-triangular matrix.
+        Forward pass that outputs a complex Hermitian matrix via the LU decomposition.
 
         Parameters
         ----------
@@ -237,7 +259,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         Returns
         -------
         Complex[Array, "matrix_dim matrix_dim"]
-            A lower-triangular matrix with complex entries and a positive real diagonal.
+            Hermitian matrix.
         """
         if self.use_spectral_embedding is True:
             x = math_utils.to_complex(jnp.squeeze(x))
@@ -258,43 +280,19 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
             
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(x))
+        return self.postprocess(out)
 
-        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
-        diag_idx = jnp.diag_indices(self.matrix_dim)
-        
-        diag = out[:self.matrix_dim]
-        diag = nn.softplus(diag)
-        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
-        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
-
-        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
-        L = L.at[diag_idx].set(diag)
-        L = L.at[tril_off_diag_idx].set(off_diag)
-        return L @ jnp.conjugate(L).T
     
     @nn.compact
     def __call2__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
-            
+        # constant matrix version   
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
-
-        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
-        diag_idx = jnp.diag_indices(self.matrix_dim)
-
-        diag = out[:self.matrix_dim]
-        # diag = jnp.exp(diag)  
-        diag = nn.softplus(diag)
-        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
-        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
-
-        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
-        L = L.at[diag_idx].set(diag)
-        L = L.at[tril_off_diag_idx].set(off_diag)
-        return L @ jnp.conjugate(L).T
+        return self.postprocess(out)
 
 @partial(jit, static_argnums=(2,3,4,5))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
-                ambient: Sequence[int], matrix_dim: int,
+                ambient: Sequence[int], matrix_dim: int, normalise_det: bool = False,
                 activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
@@ -305,7 +303,7 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
-                           activation=activation).apply(variables, p)
+                           normalise_det=normalise_det, activation=activation).apply(variables, p)
                            # activation=activation).apply(variables)
 
 
