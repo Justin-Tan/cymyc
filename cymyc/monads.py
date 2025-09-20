@@ -629,17 +629,17 @@ class HarmonicBundle:
         $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
         """
         f = self.conformal_fn(p)
-        return jnp.eye(self.rank_V, dtype=self.cdtype) * jnp.exp(f)
+        h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
         normalise_det = True
         # TODO
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      self._N_sb, normalise_det=True)
+                                      self._N_sb, normalise_det=False)
         tsb = self.twisted_section_basis_DKLR(p)
         H_fs_V = self.fubini_study_metric_twist_V_DKLR(p)
 
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
         h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
-
+        return (h + h0) * jnp.exp(f)
         if normalise_det is True:
             _, logdet = jnp.linalg.slogdet(h)
             scale = jnp.exp(-logdet / self.rank_V)
