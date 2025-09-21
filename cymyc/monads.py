@@ -362,6 +362,13 @@ class HarmonicBundle:
         d_correction = jnp.einsum("...abiu, ...ju->...abij", d_correction, jnp.conjugate(pb))
         return F_H0 + d_correction
     
+    def trace_free_curvature_correction(self, p, pb, params):
+        F = self.curvature_correction(p, pb, params)
+        TrF = jnp.einsum("...aaij->...ij", F)
+        trace_part = 1./self.rank_V * jnp.einsum("...ij, ...ab->...abij", 
+            TrF, jnp.eye(self.rank_V, dtype=TrF.dtype))
+        return F - trace_part
+
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction_conformal(self, p, pb, params):
@@ -461,7 +468,8 @@ class HarmonicBundle:
         #codiff = jnp.squeeze(codiff)
         # g_pred = vmap(self.metric_fn)(p)
         #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
-        loss = hym.objective_function_implicit_slope_V(data, params, self.curvature_correction, 
+        loss = hym.objective_function_implicit_slope_V(data, params, 
+                                                       self.trace_free_curvature_correction,
                                                        self._metric_fn, self.section_metric_network, 
                                                        self.rank_V)
         return loss
@@ -592,10 +600,6 @@ class HarmonicBundle:
         col = jnp.delete(col, patch_idx, assume_unique_indices=True)
         return jnp.insert(proj, patch_idx, col, axis=-1)
 
-    def roll_tide(self, p_c):
-        patch_idx = jnp.argmax(jnp.abs(p_c))
-        return jnp.roll(p_c, -patch_idx, 0)
-
     def twisted_section_basis_DKLR(self, p, ambient=False):
         r"""
         Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
@@ -639,12 +643,12 @@ class HarmonicBundle:
 
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
         h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
-        return (h + h0) * jnp.exp(f)
+        h = h + h0
         if normalise_det is True:
             _, logdet = jnp.linalg.slogdet(h)
             scale = jnp.exp(-logdet / self.rank_V)
             h = scale * h
-        return h
+        return h * jnp.exp(f)
 
     @staticmethod
     def int_dVol_Omega(f, w, vol_w):
@@ -661,7 +665,7 @@ class HarmonicBundle:
         # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
         # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
-        F = vmap(self.curvature_correction, in_axes=(0,0,None))(p,
+        F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None))(p,
                 pbs, params)
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
