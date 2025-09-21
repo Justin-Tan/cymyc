@@ -593,7 +593,7 @@ class HarmonicBundle:
         """
         if patch_idx is None:
             patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        patch_idx = 0
+        # patch_idx = 0
         proj = jnp.eye(self.rank_V, dtype=self.cdtype)
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_DKLR)
         col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
@@ -607,7 +607,8 @@ class HarmonicBundle:
         """
         #p_c = math_utils.to_complex(p)
         #p = math_utils.to_real(p_c)
-        patch_idx = 0  #jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        # patch_idx = 0
         Ok_powers = self.mb1
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
         blocks = [Ok_monomials] * self.rank_B
@@ -744,6 +745,7 @@ class HarmonicBundle:
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
         os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
+        logger.info(f'Dataset: {data_path}')
 
         A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
             batch_size, logger=logger)
@@ -781,6 +783,10 @@ class HarmonicBundle:
 
         _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
+        param_count = sum(x.size for x in jax.tree_util.tree_leaves(_params))
+        logger.info(f'Params (Count: {param_count})=========>>>')
+        logger.info(jax.tree_util.tree_map(lambda x: x.shape, _params))
+        logger.info(bundle_metric_model.tabulate(_k, jnp.ones([1, self.n_homo_coords * 2])))
 
         t0 = time.time()
         with jax.default_device(device):
@@ -832,6 +838,7 @@ class HarmonicBundle:
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
         os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
+        logger.info(f'Dataset: {data_path}')
 
         A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(shuffle_rng, data_path, 
             batch_size, logger=logger)
@@ -859,8 +866,11 @@ class HarmonicBundle:
         self.n_units = [48,48,48] 
         model_class = models.LearnedVector_spectral_nn
         model = model_class(self.n_homo_coords, self.ambient, self.n_units)
-
         _params, _opt_state, _ = create_train_state(_k, model, _tx, data_dim=self.n_homo_coords * 2)
+        param_count = sum(x.size for x in jax.tree_util.tree_leaves(_params))
+        logger.info(f'Params (Count: {param_count})=========>>>')
+        logger.info(jax.tree_util.tree_map(lambda x: x.shape, _params))
+        logger.info(model.tabulate(_k, jnp.ones([1, self.n_homo_coords * 2])))
 
         t0 = time.time()
         with jax.default_device(device):
