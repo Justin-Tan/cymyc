@@ -107,7 +107,7 @@ def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_
     p, pbs, w = data
     vol_Omega = jnp.mean(w)
     g = vmap(metric_fn)(p)  # frozen params
-    # g_inv = jnp.linalg.inv(g)
+    g_inv = jnp.linalg.inv(g)
     # H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
     F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
     # F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
@@ -115,11 +115,21 @@ def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_
     # F_sq = F_sq / jnp.mean(F_sq)
     #return jnp.mean(w * jnp.abs(F_sq)) / vol_Omega
 
+    F_sq = jnp.einsum("...abij, ...bcij->...acij", F, F)
+    tr_F_sq = jnp.einsum("...aaij->...ij", F_sq)
+    g_tr_F_sq = jnp.einsum("...ji,...ij->...", g_inv, tr_F_sq)
+    Tr_F_sq_g = g_tr_F_sq  # vmap(jnp.trace)(g_tr_F_sq)
+    # return jnp.mean(w * jnp.abs(Tr_F_sq_g)) / vol_Omega
+
+    # tr_F = jnp.einsum("...aaij->...ij", F)
+    # g_tr_F = jnp.einsum("...ji,...ij->...", jnp.linalg.inv(g), tr_F)  # trace over base indices
     g_tr_F = jnp.einsum("...ji,...abij->...ab", jnp.linalg.inv(g), F)  # trace over base indices
 
     tr_F_g = vmap(jnp.trace)(g_tr_F)  # trace over fibre indices
-    tr_F_g_2 = vmap(jnp.trace)(g_tr_F @ jnp.einsum("...ab->...ba", jnp.conj(g_tr_F)))
-    tr_F_g_2 = jnp.abs(tr_F_g_2)
+    # tr_F_g_2 = vmap(jnp.trace)(g_tr_F @ jnp.einsum("...ab->...ba", jnp.conj(g_tr_F)))
+    tr_F_g_2 = vmap(jnp.trace)(g_tr_F @ g_tr_F)
+    #tr_F_g_2 = jnp.real(tr_F_g_2)
+    tr_F_g_2 = jnp.real(tr_F_g_2)
 
     return jnp.mean(w * (tr_F_g_2)) / vol_Omega - 1./d * jnp.abs(jnp.mean(w * tr_F_g))**2 / vol_Omega**2
 

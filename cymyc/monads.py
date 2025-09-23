@@ -613,9 +613,11 @@ class HarmonicBundle:
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
         blocks = [Ok_monomials] * self.rank_B
         section_matrix = jax.scipy.linalg.block_diag(*blocks)
-        section_matrix = jnp.delete(section_matrix, 
-                                    self.n_linear * patch_idx + patch_idx, axis=-1, 
-                                    assume_unique_indices=True)
+        # quotient
+        section_matrix = jnp.delete(section_matrix, 0, axis=-1, assume_unique_indices=True)
+        #section_matrix = jnp.delete(section_matrix, 
+        #                            self.n_linear * patch_idx + patch_idx, axis=-1, 
+        #                            assume_unique_indices=True)
         if ambient is True: return section_matrix
         embedding_matrix = self.embedding_matrix_DKLR(p, patch_idx)
         return embedding_matrix @ section_matrix
@@ -669,15 +671,19 @@ class HarmonicBundle:
         F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None))(p,
                 pbs, params)
 
-        g_tr_F = jnp.einsum("...vu, ...abuv->...ab", jnp.linalg.inv(g), F)
+        g_inv = jnp.linalg.inv(g)
+        g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
+        F_sq = jnp.einsum("...abuv, ...bcuv->...acuv", F, F)
+        g_tr_F_sq = jnp.einsum("...vu, ...abuv->...ab", g_inv, F_sq)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
         vol_Omega = jnp.mean(w)
-        g_tr_F = vmap(jnp.trace)(g_tr_F)
+        Tr_F_g = vmap(jnp.trace)(g_tr_F)
+        Tr_F_sq_g = vmap(jnp.trace)(g_tr_F_sq)
 
-        return {'loss': loss, 'g_tr_F': jnp.mean(w * g_tr_F) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
+        return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
-                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F))}
+                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_F_sq_g': jnp.mean(w * Tr_F_sq_g) / vol_Omega}
 
     def loss_breakdown_conformal(self, data, params):
         

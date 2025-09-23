@@ -176,12 +176,14 @@ if __name__ == "__main__":
         return rescale(p[mask], patch)
 
     if args.patch is not None:
-        _p = check_min(p, args.patch)
+        # _p = check_min(p, args.patch)
+        _p = keep_patch(p, args.patch)
         out, total = [_p], _p.shape[0]
         while total < (n_p + v_p):
             _p = sample_intersect_hypersurface(key, int(1.1 * (n_p + v_p - total)) + v_p, 
                     cy_dim, monomials, coefficients)
-            _p = check_min(_p, args.patch)
+            # _p = check_min(_p, args.patch)
+            _p = keep_patch(_p, args.patch)
             abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(_p,
                 monomials, coefficients)).max()
             print(f'Max locus violation: {abs_poly_val:.7e}')
