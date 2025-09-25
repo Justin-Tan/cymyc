@@ -42,6 +42,7 @@ def ansatz_fun(p, params, *args):
 ```
 """
 
+from operator import index
 import jax
 import jax.numpy as jnp
 from jax import jit, vmap, jacfwd
@@ -287,11 +288,12 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
                 x = self.activation(x)
 
         # out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
-
         # frame-dependent branching
-        out = jax.lax.switch(frame_idx, self.heads, x)
+        def head_fn(i):
+            return lambda mdl, x: mdl.heads[i](x)
+        branches = [head_fn(i) for i in range(len(self.n_frames))]
+        out = nn.switch(frame_idx, branches, self, x)
         return self.postprocess(jnp.squeeze(out))
-
     
     @nn.compact
     def __call2__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
