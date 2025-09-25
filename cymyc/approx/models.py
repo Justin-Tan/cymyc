@@ -300,7 +300,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
         return self.postprocess(out)
 
-@partial(jit, static_argnums=(2,3,4,5))
+@partial(jit, static_argnums=(2,3,4,5,6))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
                 ambient: Sequence[int], matrix_dim: int, normalise_det: bool = False,
                 n_frames: int = 1,
@@ -314,7 +314,7 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
-                           normalise_det=normalise_det, n_frame=n_frames,
+                           normalise_det=normalise_det, n_frames=n_frames,
                            activation=activation).apply(variables, p)
                            # activation=activation).apply(variables)
 
