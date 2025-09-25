@@ -224,6 +224,13 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     matrix_dim: int = -1
     normalise_det: bool = False
     cdtype: jnp.dtype = jnp.complex64
+    n_frames: int = 1
+    def setup(self):
+        super().setup()  # builds self.layers and self.dims
+        self.n_out_cholesky = self.matrix_dim * self.matrix_dim
+        # one head per frame of holomorphic vector bundle
+        self.heads = [nn.Dense(self.n_out_cholesky, name=f'frame_head_{i}')
+                      for i in range(self.n_frames)]
 
     def postprocess(self, out):
 
@@ -263,6 +270,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         """
         if self.use_spectral_embedding is True:
             x = math_utils.to_complex(jnp.squeeze(x))
+            frame_idx = jnp.argmax(jnp.abs(x[:self.n_frames]))
             spectral_out = []
 
             for i in range(len(self.ambient)):
@@ -277,10 +285,12 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
             x = layer(x)
             if i != self.n_hidden - 1:
                 x = self.activation(x)
-            
-        n_out_cholesky = self.matrix_dim * self.matrix_dim
-        out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(x))
-        return self.postprocess(out)
+
+        # out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
+
+        # frame-dependent branching
+        out = jax.lax.switch(frame_idx, self.heads, x)
+        return self.postprocess(jnp.squeeze(out))
 
     
     @nn.compact
@@ -293,6 +303,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
 @partial(jit, static_argnums=(2,3,4,5))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
                 ambient: Sequence[int], matrix_dim: int, normalise_det: bool = False,
+                n_frames: int = 1,
                 activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
@@ -303,7 +314,8 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
 
     variables = {'params': params}
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
-                           normalise_det=normalise_det, activation=activation).apply(variables, p)
+                           normalise_det=normalise_det, n_frame=n_frames,
+                           activation=activation).apply(variables, p)
                            # activation=activation).apply(variables)
 
 

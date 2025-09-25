@@ -55,8 +55,10 @@ class HarmonicBundle:
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
         self.rank_B = len(self.line_bundle_B)
+        self.n_frames = self.rank_B
         self.line_bundle_C = (4,)
         self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
+        self.mb2 = jnp.asarray(poly_utils.monomial_basis(ambient, 2))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
         self.cdtype = np.complex64
@@ -600,7 +602,7 @@ class HarmonicBundle:
         col = jnp.delete(col, patch_idx, assume_unique_indices=True)
         return jnp.insert(proj, patch_idx, col, axis=-1)
 
-    def twisted_section_basis_DKLR(self, p, ambient=False):
+    def twisted_section_basis_DKLR(self, p, ambient=False, degree=1):
         r"""
         Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
         expressed in a local frame - typically Z_i^k. 
@@ -640,7 +642,7 @@ class HarmonicBundle:
         normalise_det = True
         # TODO
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      self._N_sb, normalise_det=False)
+                                      self._N_sb, normalise_det=False, n_frames=self.n_frames)
         tsb = self.twisted_section_basis_DKLR(p)
         H_fs_V = self.fubini_study_metric_twist_V_DKLR(p)
 
@@ -917,31 +919,19 @@ class HarmonicBundle:
 
     def sample_intersect_hypersurface(self, key: random.PRNGKey, n_p: int, 
                                       LOCUS_TOL: float = 1e-10):
-
-        """Samples from manifold defined as a hypersurface in projective space
-        by solving for the intersection 'Q(p + t * q)'.
-        """
-
+        
         _key, key = random.split(key, 2)
-
-        # Generate points on S^{2n+1} (S^{2n+1}/U(1) \cong CP^n)
         c_dim = self.cy_dim + 2  # homo. coords plus hypersurface constraint
         n_intersect = np.ceil(n_p / c_dim).astype(int)
         sphere_pts = pointgen.S2np1_uniform(_key, 2*n_intersect, self.cy_dim+1)
         p, q = jnp.split(sphere_pts, 2)
 
-        # solve for intersection of line with hypersurface, compute 
-        # Q(p + t * q), find coefficients of terms of each power symbolically
         t_coeffs_data, generators = pointgen.univariate_coefficient_data(self.cy_dim, self.monomials, self.coefficients)
         
-        # find coeffs and pass to root solver - TODO: extend to gpu.
-        # on cpu because `linalg.eig` not supported on gpu.
         pts, t_coeffs = vmap(pointgen.root_solver, in_axes=(0,0,None,None,None))(
             p, q, t_coeffs_data.values(), tuple(generators), jax.devices()[0])
         pts = pts.reshape(-1, c_dim)
 
-        # recall Bezout's theorem guarantees `c_dim` intersecting points
-        # rescale points - return homogeneous coords with $\max{|z_i|} = 1$
         pts, *_ = math_utils.rescale(pts.reshape(-1, c_dim)[:n_p])
 
         return pts
@@ -968,8 +958,6 @@ class HarmonicBundle:
         def _batch_step(i, carry):
             _T, _vol_Omega = carry
             p = self.sample_intersect_hypersurface(keys[i], batch_size)
-            abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(p, 
-                            self.monomials, self.coefficients))
             w, _pb, _dVol_Omega, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))( 
                 p, self.dQdz_monomials, self.dQdz_coeffs, self.cy_dim)
             delta_T, vol_Omega_batch = self._G_update(p, H, w)
@@ -988,7 +976,7 @@ class HarmonicBundle:
             
     @partial(jax.jit, static_argnums=(0,))
     def _G_update(self, p, H, w):
-        G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None))(p, H, True)
+        G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None,None))(p, H, True)
         integrand = jnp.einsum("...am, ...ab, ...bn->...mn", S, G, S_c)
         
         delta_T = jnp.mean(integrand * jnp.expand_dims(w, axis=(1,2)), axis=0)
@@ -1021,7 +1009,7 @@ class HarmonicBundle:
             p = p[abs_poly_val < LOCUS_TOL]
             p = self.check_min(p, patch=2)  # move to patch 0
             B = p.shape[0]
-            w, _pb, _dVol_Omega, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
+            w, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
                 p, self.dQdz_monomials, self.dQdz_coeffs, self.cy_dim)
 
             delta_T, vol_Omega_batch = self._G_update(p, H, w)
@@ -1061,16 +1049,17 @@ class HarmonicBundle:
             H_prev = H
             H = (H + self.dagger(H)) / 2
             H = step(key, H, i)
-            det_H = jnp.linalg.det(H)
             # H = H / ((det_H + eps)**(1.0 / H.shape[0]))
-            H = H / jnp.max(jnp.abs(H))
+            H = H / jnp.max(jnp.abs(H))  # fix scale of H
+
+            det_H = jnp.linalg.det(H)
             diff = jnp.linalg.norm(H - H_prev) / jnp.linalg.norm(H_prev)
             norm_H = jnp.linalg.norm(H)
 
             metrics_to_log = {
-                "Rel. Change": jnp.linalg.norm(H - H_prev) / jnp.linalg.norm(H_prev),
+                "Rel. Change": diff,
                 "Norm H": norm_H,
-                "det H": jnp.linalg.det(H),
+                "det H": det_H,
             }
 
             log_parts = [f"{name}: {value.item():.4e}" for name, value in metrics_to_log.items()]
