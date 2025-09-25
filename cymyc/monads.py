@@ -45,7 +45,6 @@ class HarmonicBundle:
         self._metric_fn = metric_fn
 
         # specify monad data
-        # make arguments later
         # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         self.family_ids = [2,6,8,22,40,42,45,49]
 
@@ -54,16 +53,16 @@ class HarmonicBundle:
         self.rank_V = 3
         self.twisting_degree = 4
         self.line_bundle_B = (1,1,1,1)
+        self.line_bundle_C = (4,)
+
         self.rank_B = len(self.line_bundle_B)
         self.n_frames = self.rank_B
-        self.line_bundle_C = (4,)
+        self.cdtype = np.complex64
+        self.n_linear = len(self.mb1)
         self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
         self.mb2 = jnp.asarray(poly_utils.monomial_basis(ambient, 2))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3)) # for basis of sections of $V \otimes O_X(k)$
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4)) # for untwisting sections
-        self.cdtype = np.complex64
-        self.n_linear = len(self.mb1)
-        # self.N_sb = len(self.mb1) * self.rank_B # 3  # number of sections of $E$
 
         self.n_hyper = self.ambient_dim - self.cy_dim
         self.n_homo_coords = monomials.shape[-1]
@@ -113,6 +112,10 @@ class HarmonicBundle:
         _monad_map = [v for v in variables[:4]]
         self.monad_map_power_matrix_DKLR = poly_utils.monomials_to_power_matrix(_monad_map, variables)
         self._N_sb = 19
+
+        _monad_map_ABKO = [v**2 for v in variables[:3]]
+        self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
+
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -351,8 +354,6 @@ class HarmonicBundle:
     def curvature_form_fn(self, p, pb, params):
         F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V_DKLR)
         ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
-        #ddbar_h = self.del_z_del_z_bar(p, self._endomorphism_network, params)
-        #emb = self.embedding_matrix_DKLR(p)
         ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
         return F_H0 + ddbar_h
 
@@ -431,12 +432,7 @@ class HarmonicBundle:
 
 
     def TrF_correction(self, p, pb, params):
-        #F_V = hym._curvature_form_V(p, pb, self.fubini_study_metric_V)
-        #ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
-        #ddbar_h = jnp.einsum("...iu, ...abuv, ...jv->...abij", pb, ddbar_h, jnp.conjugate(pb))
-        # F = self.curvature_correction(p, pb, params)
         F = self.curvature_form_fn(p, pb, params)
-        # F = self.curvature_form(p, pb, params)
         Tr_eta = jnp.einsum("...aaij->...ij", F)
 
         return Tr_eta
@@ -479,39 +475,19 @@ class HarmonicBundle:
     def conformal_rescale_network(self, p, params):
         f = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), activation=self.activation)
         return f
-
-    def section_metric_network(self, p, params):
+    
+    def section_metric_network(self, p, params, scale=1.):
         r"""
         Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
-        """
-        """
-        C = 1.
-        p_c = math_utils.to_complex(p)
-        H_fs_V = self.fubini_study_metric_V(p)
-        
-        # (n_h, n_Vk, n_Ok) * n_A if all ambient space factors identical
-        # TODO
-        k = 1
-        coeffs = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), self.N_sb, 
-                                    k*self.N_sb, None, self.n_harmonic, complex_kernel=True, activation=activation)
-        coeffs = jnp.squeeze(coeffs[0])
-        M = coeffs @ self.dagger(coeffs)
-        
-        # Overcomplete basis of V-sections
-        sv = self.section_basis_V(p)  # [dim, big_number]
-        dual_sv = jnp.einsum("...ab, ...bn->...an", H_fs_V, jnp.conjugate(sv))
-        H = jnp.einsum("...am, ...mn, ...bn->...ab", dual_sv, M, jnp.conjugate(dual_sv))
-        return H_fs_V + H
-
-        H_inv = jnp.einsum("...bm, ...mn, ...an->...ba", jnp.conjugate(sv), M, sv)  # [\bar{b}, a]
-        return jnp.linalg.inv(H_inv)  # [a, \bar{b}]
-        """
-
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
-        # tsb = self.twisted_section_basis(p)
         tsb = self.twisted_section_basis_DKLR(p)
         G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
         return jnp.linalg.inv(G_inv)
+        """
+        h = self.endomorphism_network(p, params)
+        H0 = self.fubini_study_metric_twist_V_DKLR(p)
+        H = jnp.einsum("...ca, ...cb->...ab", h, H0)
+        return H * scale
 
     def conformal_change(self, p, params):
         pb = self.pb_fn(math_utils.to_complex(p))
@@ -607,9 +583,8 @@ class HarmonicBundle:
         Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
         expressed in a local frame - typically Z_i^k. 
         """
-        #p_c = math_utils.to_complex(p)
-        #p = math_utils.to_real(p_c)
-        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        p_c = math_utils.to_complex(p)
+        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         # patch_idx = 0
         Ok_powers = self.mb1
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
@@ -626,6 +601,45 @@ class HarmonicBundle:
 
     def fubini_study_metric_twist_V_DKLR(self, p):
         tsb = self.twisted_section_basis_DKLR(p)
+        fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
+        fs = jnp.linalg.inv(fs_inv)
+        return fs
+    
+    def embedding_matrix_ABKO(self, p, patch_idx=None):
+        r"""
+        Describes embedding $\iota: V \righthookarrow B$.
+        """
+        if patch_idx is None:
+            p_c = math_utils.to_complex(p)
+            patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        # patch_idx = 0
+        proj = jnp.eye(self.rank_V, dtype=self.cdtype)
+        f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix_ABKO)
+        col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
+        col = jnp.delete(col, patch_idx, assume_unique_indices=True)
+        return jnp.insert(proj, patch_idx, col, axis=-1)
+    
+    def twisted_section_basis_ABKO(self, p, ambient=False, degree=1):
+        r"""
+        Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
+        expressed in a local frame - typically Z_i^k. 
+        """
+
+        p_c = math_utils.to_complex(p)
+        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        # patch_idx = 0
+        Ok_powers = self.mb3
+        Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
+        blocks = [Ok_monomials] * self.rank_B
+        section_matrix = jax.scipy.linalg.block_diag(*blocks)
+        # quotient
+        section_matrix = jnp.delete(section_matrix, 0, axis=-1, assume_unique_indices=True)
+        if ambient is True: return section_matrix
+        embedding_matrix = self.embedding_matrix_ABKO(p, patch_idx)
+        return embedding_matrix @ section_matrix
+
+    def fubini_study_metric_twist_V_ABKO(self, p):
+        tsb = self.twisted_section_basis_ABKO(p)
         fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
         fs = jnp.linalg.inv(fs_inv)
         return fs
@@ -664,12 +678,8 @@ class HarmonicBundle:
         loss = self.objective_function(data, params)
         p, pbs, w = data
 
-        # h = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
-        # F = vmap(self.curvature_form, in_axes=(0,0,None))(p, pbs, params)
-        # F = vmap(self.curvature_form_fn, in_axes=(0,0,None))(p, pbs, params)
-        # F = vmap(self.curvature_correction, in_axes=(0,0,None))(p, pbs, params)
         F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None))(p,
                 pbs, params)
 
@@ -780,11 +790,7 @@ class HarmonicBundle:
         )
         self.n_units_harmonic = [48,48,48]
         if conformal_fn is not None: self.conformal_fn = conformal_fn
-        # model_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        # k = 1
-        # bundle_metric_model = model_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, n_1=self.N_sb,
-        #                                   n_2=k * self.N_sb, n_harmonic=self.n_harmonic, complex_kernel=True,
-        #                                   activation=nn.gelu)
+
         coeff_class = models.CholeskyNetwork
         bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
                 matrix_dim=self._N_sb, n_frames=self.n_frames)
