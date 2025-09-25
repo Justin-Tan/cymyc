@@ -291,7 +291,13 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         # frame-dependent branching
         def head_fn(i):
             return lambda mdl, x: mdl.heads[i](x)
-        branches = [head_fn(i) for i in range(len(self.n_frames))]
+        branches = [head_fn(i) for i in range(self.n_frames)]
+
+        # run all branches on init
+        if self.is_mutable_collection('params'):
+            for branch in branches:
+                _ = branch(self, x)
+
         out = nn.switch(frame_idx, branches, self, x)
         return self.postprocess(jnp.squeeze(out))
     
