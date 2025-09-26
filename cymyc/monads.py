@@ -52,7 +52,7 @@ class HarmonicBundle:
 
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 1  # 3 for ABKO
+        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
@@ -101,11 +101,11 @@ class HarmonicBundle:
         
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         variables = sp.symarray('z', ambient.item() + len(ambient))
-        monad_map = [v**3 for v in variables[:4]]
-        self._monad_map_power_matrix = poly_utils.monomials_to_power_matrix(monad_map, variables)
+        _monad_map_AG = [v**3 for v in variables[:4]]
+        self.monad_map_power_matrix_AG = poly_utils.monomials_to_power_matrix(_monad_map_AG, variables)
         monomials_B = mbl.power_matrix
         monomials_C = self.monomial_basis.power_matrix
-        self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, monad_map, 
+        self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, _monad_map_AG, 
                                                                                    monomials_B, monomials_C)
         
         self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
@@ -113,13 +113,13 @@ class HarmonicBundle:
 
         _monad_map_DKLR = [v for v in variables[:4]]
         self.monad_map_power_matrix_DKLR = poly_utils.monomials_to_power_matrix(_monad_map_DKLR, variables)
-        self._N_sb = 19
 
         _monad_map_ABKO = [v**2 for v in variables[:3]]
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
+        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
