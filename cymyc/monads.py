@@ -479,19 +479,6 @@ class HarmonicBundle:
     def conformal_rescale_network(self, p, params):
         f = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), activation=self.activation)
         return f
-    
-    def section_metric_network(self, p, params, scale=1.):
-        r"""
-        Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
-        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
-        tsb = self.twisted_section_basis(p)
-        G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
-        return jnp.linalg.inv(G_inv)
-        """
-        h = self.endomorphism_network(p, params)
-        H0 = self.fubini_study_metric_twist_V(p)
-        H = jnp.einsum("...ca, ...cb->...ab", h, H0)
-        return H * scale
 
     def conformal_change(self, p, params):
         pb = self.pb_fn(math_utils.to_complex(p))
@@ -609,6 +596,19 @@ class HarmonicBundle:
         fs = jnp.linalg.inv(fs_inv)
         return fs
 
+    def section_metric_network(self, p, params, scale=1.):
+        r"""
+        Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
+        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
+        tsb = self.twisted_section_basis(p)
+        G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
+        return jnp.linalg.inv(G_inv)
+        """
+        h = self.endomorphism_network(p, params)
+        H0 = self.fubini_study_metric_twist_V(p)
+        H = jnp.einsum("...ca, ...cb->...ab", h, H0)
+        return H * scale
+
     def endomorphism_network(self, p, params, normalise_det=False):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
@@ -634,6 +634,15 @@ class HarmonicBundle:
             h = scale * h
         return h * jnp.exp(f)
 
+    def untwisted_metric(self, p, params):
+        # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
+        H_K = self.section_metric_network(p, params)
+        det_H_K = jnp.linalg.det(H_K)
+        return H_K * (det_H_K)**(-1./self.rank_V)
+
+    def untwisted_curvature(self, p, params):
+        return self.curvature_form_V(p, self.untwisted_metric, params)
+
     @staticmethod
     def int_dVol_Omega(f, w, vol_w):
         return jnp.mean(f * w) / vol_w
@@ -645,10 +654,15 @@ class HarmonicBundle:
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
+        g_inv = jnp.linalg.inv(g)
         F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None))(p,
                 pbs, params)
+        H = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
 
-        g_inv = jnp.linalg.inv(g)
+        F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
+        F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
+        ym_energy = F_sq / 2.
+
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
         F_sq = jnp.einsum("...abuv, ...bcuv->...acuv", F, F)
         g_tr_F_sq = jnp.einsum("...vu, ...abuv->...ab", g_inv, F_sq)
@@ -660,7 +674,8 @@ class HarmonicBundle:
 
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
-                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_F_sq_g': jnp.mean(w * Tr_F_sq_g) / vol_Omega}
+                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_F_sq_g': jnp.mean(w * Tr_F_sq_g) / vol_Omega,
+                'YM energy': jnp.mean(w * ym_energy) / vol_Omega}
 
     def loss_breakdown_conformal(self, data, params):
         
@@ -676,7 +691,6 @@ class HarmonicBundle:
         codiff_norm = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1))
         # codiff_norm = jnp.einsum("...vu, ...u, ...v", g_inv[:k], codiff, jnp.conj(codiff))
         var = hym.objective_function_implicit_slope(data, params, self.conformal_change, self._metric_fn)
-
         TrF = vmap(self.conformal_change, in_axes=(0,None))(p, params)
         TrF_H0 = vmap(self.TrF_H_0)(p)
         Lambda_TrF = jnp.einsum("...vu, ...uv->... ", g_inv, TrF)
