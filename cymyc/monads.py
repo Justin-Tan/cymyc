@@ -778,9 +778,18 @@ class HarmonicBundle:
         self.n_units_harmonic = [48,48,48]
         if conformal_fn is not None: self.conformal_fn = conformal_fn
 
-        coeff_class = models.CholeskyNetwork
-        bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
-                matrix_dim=self._N_sb, n_frames=self.n_frames)
+        # coeff_class = models.CholeskyNetwork
+        # bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
+        #         matrix_dim=self._N_sb, n_frames=self.n_frames)
+        coeff_class = models.AttentiveLowRankNetwork  # <— use attentive model
+        bundle_metric_model = coeff_class(
+            self.n_homo_coords, self.ambient, self.n_units_harmonic,
+            matrix_dim=self._N_sb,
+            n_frames=self.n_frames,
+            rank=16,             
+            top_k=32,             
+            normalise_det=False,
+        )
 
         _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
