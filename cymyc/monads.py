@@ -52,7 +52,8 @@ class HarmonicBundle:
 
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        # self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 3
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
@@ -118,7 +119,8 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
@@ -482,7 +484,8 @@ class HarmonicBundle:
 
     def conformal_change(self, p, params):
         pb = self.pb_fn(math_utils.to_complex(p))
-        xi = self.TrF_H_0(p)
+        xi = self.ddbar_log_det_H_0(p, pb)
+        # xi = self.TrF_H_0(p)
         # xi = curvature.ricci_form_kahler(p, self.fs_metric_fn, pb)
         ddbar_f = self.del_z_del_z_bar(p, self.conformal_rescale_network, params)
         ddbar_f = jnp.einsum("...iu, ...uv, ...jv->...ij", pb, ddbar_f, jnp.conjugate(pb))
@@ -547,9 +550,9 @@ class HarmonicBundle:
         return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
 
     def log_det_H_0(self, p):
-        H_0 = self.fubini_study_metric_twist_V(p)
+        H_0_inv = self.fubini_study_metric_twist_V(p, True)
         s, logdet = jnp.linalg.slogdet(H_0)
-        return logdet + 1j * jnp.pi * (s < 0)
+        return -logdet + 1j * jnp.pi * (s < 0)
 
     def H0_conformal_change(self, p, params):
         f = self.conformal_rescale_network(p, params)
@@ -590,9 +593,10 @@ class HarmonicBundle:
         embedding_matrix = self.embedding_matrix_twisted(p, patch_idx)
         return embedding_matrix @ section_matrix
 
-    def fubini_study_metric_twist_V(self, p):
+    def fubini_study_metric_twist_V(self, p, inv=False):
         tsb = self.twisted_section_basis(p)
         fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
+        if inv is True: return fs_inv
         fs = jnp.linalg.inv(fs_inv)
         return fs
 
