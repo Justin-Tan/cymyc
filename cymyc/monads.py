@@ -119,8 +119,7 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
@@ -551,7 +550,7 @@ class HarmonicBundle:
 
     def log_det_H_0(self, p):
         H_0_inv = self.fubini_study_metric_twist_V(p, True)
-        s, logdet = jnp.linalg.slogdet(H_0)
+        s, logdet = jnp.linalg.slogdet(H_0_inv)
         return -logdet + 1j * jnp.pi * (s < 0)
 
     def H0_conformal_change(self, p, params):
