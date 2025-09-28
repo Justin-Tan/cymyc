@@ -467,10 +467,6 @@ class HarmonicBundle:
     def objective_function(self, data, params):
         #(p, pb, w) = data
         #vol_Omega = jnp.mean(w)
-        #codiff = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pb, params)
-        #codiff = jnp.squeeze(codiff)
-        # g_pred = vmap(self.metric_fn)(p)
-        #loss = jnp.mean(jnp.abs(codiff) * jnp.expand_dims(w, axis=1)) / vol_Omega
         loss = hym.objective_function_implicit_slope_V(data, params, 
                                                        self.trace_free_curvature_correction,
                                                        self._metric_fn, self.section_metric_network, 
@@ -623,8 +619,17 @@ class HarmonicBundle:
         h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
         normalise_det = True
         # TODO
-        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      self._N_sb, normalise_det=False, n_frames=self.n_frames)
+        #coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
+        #                              self._N_sb, normalise_det=False, n_frames=self.n_frames)
+        coeffs = models.attentive_lowrank_head(
+            p, params,
+            self.n_homo_coords, tuple(self.ambient),
+            self._N_sb,
+            rank=16,
+            top_k=32,
+            n_frames=self.n_frames,
+            normalise_det=False
+        )
         tsb = self.twisted_section_basis(p)
         H_fs_V = self.fubini_study_metric_twist_V(p)
 

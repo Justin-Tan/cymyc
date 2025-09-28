@@ -52,7 +52,7 @@ import numpy as np
 from flax import linen as nn
 
 from functools import partial
-from typing import Callable, Sequence, Mapping
+from typing import Callable, Sequence, Mapping, Optional
 from jaxtyping import Array, Float, Complex, ArrayLike
 from dataclasses import field
 
@@ -650,3 +650,147 @@ def helper_fns(config):
     g_correction_fn = partial(phi_head, n_hyper=config.n_hyper, ambient=tuple(config.ambient))
 
     return g_FS_fn, g_correction_fn, pb_fn
+
+
+class AttentiveLowRankNetwork(LearnedVector_spectral_nn_CICY):
+    """
+    Output-attends-to-input head producing a Hermitian PD matrix:
+      H = M M^† + diag(d), with rank r << N.
+    - Learns per-basis token features (keys/values) conditioned on input.
+    - Builds r queries from the global context (torso).
+    - Optional per-query top-k sparsification for cheaper higher-order AD.
+    - Supports frame-dependent routing via flax.linen.switch.
+    """
+    matrix_dim: int = -1       # N = number of sections (self._N_sb)
+    rank: int = 8              # low rank r
+    d_token: int = 64          # token feature width
+    d_k: int = 64
+    d_v: int = 64
+    top_k: Optional[int] = None  # keep top-k indices per query (None => dense softmax)
+    n_frames: int = 1
+    cdtype: jnp.dtype = jnp.complex64
+    normalise_det: bool = False  # optional unit-det on the diagonal part only
+
+    def setup(self):
+        super().setup()
+        N = self.matrix_dim
+
+        # Per-basis index embeddings
+        self.index_embed = nn.Embed(num_embeddings=N, features=self.d_token, name='index_embed')
+
+        # One parameter set per frame (patched via nn.switch)
+        self.ctx_fc1 = [nn.Dense(self.d_token, name=f'ctx_fc1_{i}') for i in range(self.n_frames)]
+        self.q_proj   = [nn.Dense(self.d_k * self.rank, name=f'q_proj_{i}') for i in range(self.n_frames)]
+        self.cond_proj= [nn.Dense(self.d_token, name=f'cond_proj_{i}') for i in range(self.n_frames)]
+        self.tk_fc1   = [nn.Dense(self.d_token, name=f'tk_fc1_{i}') for i in range(self.n_frames)]
+        self.tk_fc2   = [nn.Dense(self.d_token, name=f'tk_fc2_{i}') for i in range(self.n_frames)]
+        self.k_proj   = [nn.Dense(self.d_k, name=f'k_proj_{i}') for i in range(self.n_frames)]
+        self.v_proj   = [nn.Dense(self.d_v, name=f'v_proj_{i}') for i in range(self.n_frames)]
+        # Heads for diagonal and per-query scales/phases
+        self.diag_head  = [nn.Dense(self.matrix_dim, name=f'diag_head_{i}') for i in range(self.n_frames)]
+        self.scale_head = [nn.Dense(self.rank, name=f'scale_head_{i}') for i in range(self.n_frames)]
+        self.phase_head = [nn.Dense(self.rank, name=f'phase_head_{i}') for i in range(self.n_frames)]
+
+    def _build_features(self, x):
+        # Spectral embedding (if enabled) + shared torso from base class
+        if self.use_spectral_embedding:
+            z = math_utils.to_complex(jnp.squeeze(x))
+            frame_idx = jnp.argmax(jnp.abs(z[:self.n_frames])).astype(jnp.int32)
+            spectral_out = []
+            for i in range(len(self.ambient)):
+                s = int(np.sum(self.ambient[:i]) + i)
+                e = int(np.sum(self.ambient[:i+1]) + i + 1)
+                p_i = jax.lax.dynamic_slice(z, (s,), (e - s,))
+                spectral_out.append(self.spectral_layer(math_utils.to_real(p_i), self.dims[i]))
+            feat = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
+        else:
+            z = math_utils.to_complex(jnp.squeeze(x))
+            frame_idx = jnp.argmax(jnp.abs(z[:self.n_frames])).astype(jnp.int32)
+            feat = jnp.squeeze(x)
+        for i, layer in enumerate(self.layers):
+            feat = layer(feat)
+            if i != self.n_hidden - 1:
+                feat = self.activation(feat)
+        return feat, frame_idx
+
+    def _attend_and_build(self, i_frame: int, feat: jnp.ndarray) -> jnp.ndarray:
+        """
+        Single-frame head: build H = M M^† + diag(d) with cross-attention onto N tokens.
+        """
+        N, r, dk, dv = self.matrix_dim, self.rank, self.d_k, self.d_v
+
+        # Context -> queries
+        ctx = nn.gelu(self.ctx_fc1[i_frame](feat))                             # [d_token]
+        Q = self.q_proj[i_frame](ctx).reshape(r, dk)                           # [r, d_k]
+
+        # Per-basis tokens, conditioned by input (FiLM-like)
+        ids = jnp.arange(N, dtype=jnp.int32)
+        tok0 = self.index_embed(ids)                                           # [N, d_token]
+        cond = self.cond_proj[i_frame](feat)                                   # [d_token]
+        tok = nn.gelu(self.tk_fc1[i_frame](tok0 + cond))                       # [N, d_token]
+        tok = self.tk_fc2[i_frame](tok)                                        # [N, d_token]
+        K = self.k_proj[i_frame](tok)                                          # [N, d_k]
+        V = self.v_proj[i_frame](tok)                                          # [N, d_v]
+
+        # Scores and (optional) top-k masking per query
+        scores = (Q @ K.T) / jnp.sqrt(dk)                                      # [r, N]
+        if self.top_k is not None and self.top_k < N:
+            def mask_row(s):
+                vals, idx = jax.lax.top_k(s, k=self.top_k)
+                mask = jnp.full_like(s, -jnp.inf)
+                mask = mask.at[idx].set(0.0)
+                return s + mask
+            scores = jax.vmap(mask_row)(scores)
+
+        W = nn.softmax(scores, axis=-1)                                        # [r, N]
+        U = W.T                                                                # [N, r] (real, nonneg)
+
+        # Per-query complex scales (amplitude + phase)
+        amp = nn.softplus(self.scale_head[i_frame](feat))                      # [r], >=0
+        phase = jnp.pi * jnp.tanh(self.phase_head[i_frame](feat))              # [r], in (-π, π)
+        s_complex = jax.lax.complex(amp * jnp.cos(phase), amp * jnp.sin(phase))# [r]
+
+        # M ∈ C^{N×r}: broadcast complex scales across rows
+        Uc = jax.lax.complex(U, jnp.zeros_like(U))
+        M = Uc * s_complex[None, :]                                            # [N, r] complex
+
+        # Diagonal (positive)
+        diag_raw = self.diag_head[i_frame](feat)                               # [N]
+        if self.normalise_det:
+            log_diag = diag_raw - jnp.mean(diag_raw)
+            d = jnp.exp(log_diag)
+        else:
+            d = nn.softplus(diag_raw)
+
+        # H = M M^† + diag(d)
+        H = M @ jnp.conjugate(M).T                                             # [N, N] Hermitian PSD
+        H = H + jnp.diag(d).astype(self.cdtype)
+        return 0.5 * (H + jnp.conjugate(H).T)
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        feat, frame_idx = self._build_features(x)
+
+        branches = [lambda module: module._attend_and_build(i, feat)
+                    for i in range(self.n_frames)]
+
+        if self.is_mutable_collection('params'):
+            for b in branches:
+                _ = b(self)
+
+        H = nn.switch(frame_idx, branches, self)
+        return H.astype(self.cdtype)
+
+
+def attentive_lowrank_head(p, params, n_homo_coords, ambient, matrix_dim,
+                           rank=8, top_k=None, n_frames=1, normalise_det=False):
+    """
+    Apply AttentiveLowRankNetwork with existing params (created from this module).
+    """
+    model = AttentiveLowRankNetwork(n_homo_coords, ambient, (),  # no extra hidden here (torso from base)
+                                    matrix_dim=matrix_dim,
+                                    rank=rank, top_k=top_k,
+                                    n_frames=n_frames,
+                                    normalise_det=normalise_det)
+    x = math_utils.to_real(p)  # ensure real input shape [2 * n_homo_coords]
+    return model.apply({'params': params}, x)
