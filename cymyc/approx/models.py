@@ -311,7 +311,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         def head_lr_fn(i):
             return lambda mdl, x: mdl.lr_approx(x, i)
             
-        if self.lr_approx == 0:
+        if self.low_rank_approx == 0:
             branches = [head_fn(i) for i in range(self.n_frames)]
         else:
             branches = [head_lr_fn(i) for i in range(self.n_frames)]
@@ -322,7 +322,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
                 _ = branch(self, x)
 
         out = nn.switch(frame_idx, branches, self, x)
-        if self.lr_approx > 0: return out
+        if self.low_rank_approx > 0: return out
         return self.postprocess(jnp.squeeze(out))
     
     @nn.compact

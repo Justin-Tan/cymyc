@@ -122,7 +122,7 @@ class HarmonicBundle:
         # CHANGE THIS
         self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
-        self.lr_approx = min(16, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = min(24, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -613,7 +613,8 @@ class HarmonicBundle:
     @staticmethod
     def low_rank_reconstruct(M, D, S, S_dual):
         U = S @ M
-        h_lr = U @ jnp.conj(U).T
+        V = jnp.conj(M).T @ S_dual.T
+        h_lr = U @ V
         h_diag = jnp.einsum("...am, ...m, ...bm->...ab", S, D, S_dual)
         h = h_lr + h_diag
         return h
