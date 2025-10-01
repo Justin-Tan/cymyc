@@ -57,6 +57,7 @@ class HarmonicBundle:
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
+
         self.rank_B = len(self.line_bundle_B)
         self.n_frames = self.rank_B
         self.cdtype = np.complex64
@@ -121,6 +122,7 @@ class HarmonicBundle:
         # CHANGE THIS
         self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
+        self.lr_approx = min(24, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -608,6 +610,15 @@ class HarmonicBundle:
         H = jnp.einsum("...ca, ...cb->...ab", h, H0)
         return H * scale
 
+    @staticmethod
+    def low_rank_reconstruct(M, D, S, S_dual):
+        U = S @ M
+        V = jnp.conj(M).T @ S_dual.T
+        h_lr = U @ V
+        h_diag = jnp.einsum("...am, ...m, ...bm->...ab", S, D, S_dual)
+        h = h_lr + h_diag
+        return h
+
     def endomorphism_network(self, p, params, normalise_det=False):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
@@ -619,22 +630,19 @@ class HarmonicBundle:
         h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
         normalise_det = True
         # TODO
-        #coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), 
-        #                              self._N_sb, normalise_det=False, n_frames=self.n_frames)
-        coeffs = models.attentive_lowrank_head(
-            p, params,
-            self.n_homo_coords, tuple(self.ambient),
-            self._N_sb,
-            rank=16,
-            top_k=32,
-            n_frames=self.n_frames,
-            normalise_det=False
-        )
+        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
+                                      self._N_sb, normalise_det=False, n_frames=self.n_frames,
+                                      low_rank_approx=self.lr_approx)
         tsb = self.twisted_section_basis(p)
         H_fs_V = self.fubini_study_metric_twist_V(p)
-
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
-        h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+
+        if self.lr_approx > 0:
+            M, D = coeffs
+            h = self.low_rank_reconstruct(M, D, tsb, tsb_dual)
+        else:  # full dense matrix
+            h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+
         h = h + h0
         if normalise_det is True:
             _, logdet = jnp.linalg.slogdet(h)
@@ -738,7 +746,8 @@ class HarmonicBundle:
         return params, opt_state, init_rng
     
     def fit(self, data_path, epochs: int = 32, batch_size: int = 512, lr: float = 1e-4,
-            conformal_fn = None, shuffle_rng = np.random.default_rng(), name = None):
+            conformal_fn = None, shuffle_rng = np.random.default_rng(), name = None,
+            ckpt: dict = None):
         from datetime import datetime
 
         self.name = f"HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
@@ -778,21 +787,14 @@ class HarmonicBundle:
         self.n_units_harmonic = [48,48,48]
         if conformal_fn is not None: self.conformal_fn = conformal_fn
 
-        # coeff_class = models.CholeskyNetwork
-        # bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic, 
-        #         matrix_dim=self._N_sb, n_frames=self.n_frames)
-        coeff_class = models.AttentiveLowRankNetwork  # <— use attentive model
-        bundle_metric_model = coeff_class(
-            self.n_homo_coords, self.ambient, self.n_units_harmonic,
-            matrix_dim=self._N_sb,
-            n_frames=self.n_frames,
-            rank=16,             
-            top_k=32,             
-            normalise_det=False,
-        )
+        coeff_class = models.CholeskyNetwork
+        bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
+                matrix_dim=self._N_sb, n_frames=self.n_frames, low_rank_approx=self.lr_approx)
 
         _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
         # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
+        if ckpt is not None:
+            _params, _opt_state = utils.load_ckpt(_params, _opt_state, ckpt['params'], ckpt['opt'])
         param_count = sum(x.size for x in jax.tree_util.tree_leaves(_params))
         logger.info(f'Params (Count: {param_count})=========>>>')
         logger.info(jax.tree_util.tree_map(lambda x: x.shape, _params))
