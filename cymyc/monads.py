@@ -45,11 +45,6 @@ class HarmonicBundle:
         self._metric_fn = metric_fn
 
         # specify monad data
-        # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
-        self.family_ids = [2,6,8,22,40,42,45,49]
-        # self.n_harmonic = len(self.family_ids)
-        self.n_harmonic = 1
-
         # CHANGE THIS
         self.rank_V = 3
         # self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
@@ -208,33 +203,6 @@ class HarmonicBundle:
         H_fs_Ok = hym.reference_hermitian_structure(p, (k,), tuple(self.ambient))
         
         return H_fs_V_dual * H_fs_Ok  # \bar{\mu} \nu
-
-
-    def preimage_monomials(self, q_basis_element):
-        return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
-    
-    def partition_of_unity(self, p):
-        p_c = math_utils.to_complex(p)[:len(self.monad_map_power_matrix)]
-        exp_arg = jnp.real(p_c * jnp.conjugate(p_c))
-        p_abs_sq = jnp.sum(exp_arg)
-        w = jnp.exp(-exp_arg / p_abs_sq)
-        return w / jnp.sum(w)
-    
-    def monad_map_preimage(self, p):
-        r"""
-        Preimage of monad map, giving smooth sections of $C^{\infty}(X; B)
-        s.t. f(preimage) = quotient_mono(p) for each quotient mono in the basis. 
-        This is $\hat{\mu}$ in the LES. 
-        """
-        _preimage_monomials = vmap(self.preimage_monomials)(self.quotient_basis)
-        _preimage_coeffs = self.partition_of_unity(p)
-        mono_eval = poly_utils.monomial_evaluate_log(p, _preimage_monomials)
-        return jnp.expand_dims(_preimage_coeffs, axis=(0,)) * mono_eval
-        
-    def del_bar_section_B(self, p):
-        del_bar_mu = curvature.del_bar_z(p, self.monad_map_preimage)
-        pb = self.pb_fn(math_utils.to_complex(p))
-        return jnp.einsum("...hav, ...uv->...hau", del_bar_mu, jnp.conjugate(pb))
     
     def monad_map(self, p, s_B):
         """
@@ -299,55 +267,6 @@ class HarmonicBundle:
         embedding_matrix = self.embedding_matrix(p)
     
         return embedding_matrix @ section_matrix
-
-
-    @partial(jax.jit, static_argnums=(0,))
-    def H1XV_representatives(self, p):
-        """
-        Representatives of the $H^1(X;V)$ cohomology
-        """
-        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        nu = self.del_bar_section_B(p)
-        # project onto subbundle
-        nu = jnp.delete(nu, patch_idx, axis=-2, assume_unique_indices=True)
-        # nu = jnp.delete(nu, 0, axis=-2, assume_unique_indices=True)
-
-        # select families for testing
-        return jnp.take(nu, np.asarray(self.family_ids), axis=0)
-
-
-    @partial(jax.jit, static_argnums=(0,))
-    def yukawa_couplings(self, p):
-        p_c = math_utils.to_complex(p)
-        weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(p_c)
-
-        dQdz = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p_c, self.dQdz_monomials, self.dQdz_coeffs)
-        Omega = vmap(self.Omega_fn)(p_c, jnp.expand_dims(dQdz,1))
-
-        nu = vmap(self.H1XV_representatives)(p)  # [..., h^1_V, rank_V, cy_dim]
-        
-        contraction = jnp.einsum('...ijk, ...xyz, ...aix, ...bjy, ...ckz -> ...abc',
-                   self.eps_3d, self.eps_3d, nu, nu, nu)
-        contraction = jnp.squeeze(contraction)
-
-        kappa_abc = jnp.expand_dims(Omega**2, axis=((1,2,3))) * contraction
-        
-        kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc
-        int_kappa_abc = jnp.mean(kappa_integrand, axis=0)
-
-        return int_kappa_abc
-
-    def yukawa_couplings_batched(self, p, batch_size=16384, kappa_dtype=np.float32):
-        n = 0
-        kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
-        n_chunks = p.shape[0] // batch_size
-        data = jnp.array_split(p, n_chunks)
-        for t, _p in enumerate(tqdm(data, total=len(data))):
-            B = _p.shape[0]
-            _kappa = self.yukawa_couplings(_p)
-            kappa = kappa = math_utils.online_update_array(kappa, _kappa, n, B)
-            n += B
-        return kappa
 
     def connection_form(self, p, params):
         A = self.connection_form_V(p, self.section_metric_network, params)
@@ -680,6 +599,8 @@ class HarmonicBundle:
         ym_energy = F_sq / 2.
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
+        Lambda_F_sq = jnp.einsum("...ab, ...bc->..ac", g_tr_F, g_tr_F)
+        Tr_Lambda_F_sq = jnp.einsum("...aa->...", Lambda_F_sq)
         F_sq = jnp.einsum("...abuv, ...bcuv->...acuv", F, F)
         g_tr_F_sq = jnp.einsum("...vu, ...abuv->...ab", g_inv, F_sq)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
@@ -690,7 +611,7 @@ class HarmonicBundle:
 
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
-                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_F_sq_g': jnp.mean(w * Tr_F_sq_g) / vol_Omega,
+                'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
                 'YM energy': jnp.mean(w * ym_energy) / vol_Omega}
 
     def loss_breakdown_conformal(self, data, params):
@@ -921,6 +842,14 @@ class HarmonicBundle:
         utils.save_logs(storage, self.name, 'FIN')
         return _params, storage
 
+
+class GenDonaldson(HarmonicBundle):
+
+    def __init__(self, metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys=None):
+        super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
+        self.twisting_degree = 1
+        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+
     def sample_intersect_hypersurface(self, key: random.PRNGKey, n_p: int, 
                                       LOCUS_TOL: float = 1e-10):
         
@@ -939,14 +868,6 @@ class HarmonicBundle:
         pts, *_ = math_utils.rescale(pts.reshape(-1, c_dim)[:n_p])
 
         return pts
-
-    def fibre_metric_from_H(self, p, H, aux=False):
-        S = self.twisted_section_basis(p)
-        S_c = jnp.conjugate(S)
-        G_inv = jnp.einsum("mn, ...am, ...bn->...ab", H, S, S_c)
-        G = jnp.einsum("...ba->...ab", jnp.linalg.inv(G_inv))  # G_{a \overline{b}}
-        if aux is True: return G, S, S_c
-        return G
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_form_donaldson(self, p, H):
@@ -977,9 +898,19 @@ class HarmonicBundle:
         # inverse of output of T-operator is the Hermitian matrix on the space of sections
         H_update = jnp.linalg.inv(T).T
         return H_update
+    
+
+    def fibre_metric_from_H(self, p, H, aux=False):
+        S = self.twisted_section_basis(p)
+        S_c = jnp.conjugate(S)
+        G_inv = jnp.einsum("mn, ...am, ...bn->...ab", H, S, S_c)
+        G = jnp.einsum("...ba->...ab", jnp.linalg.inv(G_inv))  # G_{a \overline{b}}
+        if aux is True: return G, S, S_c
+        return G
             
     @partial(jax.jit, static_argnums=(0,))
     def _G_update(self, p, H, w):
+        p = math_utils.to_real(p)
         G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None,None))(p, H, True)
         integrand = jnp.einsum("...am, ...ab, ...bn->...mn", S, G, S_c)
         
@@ -1011,7 +942,7 @@ class HarmonicBundle:
             abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(p,
                             self.monomials, self.coefficients))
             p = p[abs_poly_val < LOCUS_TOL]
-            p = self.check_min(p, patch=2)  # move to patch 0
+            p = self.check_min(p, patch=0)  # move to patch 0
             B = p.shape[0]
             w, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
                 p, self.dQdz_monomials, self.dQdz_coeffs, self.cy_dim)
@@ -1026,13 +957,26 @@ class HarmonicBundle:
 
         # inverse of output of T-operator is the Hermitian matrix on the space of sections
         H_update = jnp.linalg.inv(T).T
-        return H_update
+        return H_update, math_utils.to_real(p), w
 
+    def eval(self, p, w, H):
+
+        vol_Omega = jnp.mean(w)
+        g = vmap(self._metric_fn)(p)
+        g_inv = jnp.linalg.inv(g)
+        F = vmap(self.curvature_form_donaldson, in_axes=(0,None))(p, H)
+        g_tr_F = jnp.einsum("...ji,...abij->...ab", g_inv, F)
+
+        Lambda_TrF_pw = jnp.einsum("...aa->...", g_tr_F)
+        Lambda_TrF = jnp.mean(Lambda_TrF_pw * w) / vol_Omega
+        S_Lambda_TrF = jnp.sum((jnp.real(Lambda_TrF_pw) - jnp.real(Lambda_TrF))**2 * w) / vol_Omega
+        sigma = jnp.sqrt(S_Lambda_TrF) / (p.shape[0] - 1)
+        return Lambda_TrF, sigma
 
     def generalised_donaldson(self, iterations=16, batch_size=8192):
 
         key = jax.random.PRNGKey(42)
-        Np = (10 * self._N_sb**2 + 50000) * 25
+        Np = (10 * self._N_sb**2 + 50000) * 10
         print(f"Using {Np} points ...")
         print(f"Using device {jax.devices()} ...")
 
@@ -1051,7 +995,7 @@ class HarmonicBundle:
         for i in progress:
             H_prev = H
             H = (H + self.dagger(H)) / 2
-            H = step(key, H, i)
+            H, _p, _w = step(key, H, i)
             # H = H / ((det_H + eps)**(1.0 / H.shape[0]))
             H = H / jnp.max(jnp.abs(H))  # fix scale of H
 
@@ -1059,10 +1003,14 @@ class HarmonicBundle:
             diff = jnp.linalg.norm(H - H_prev) / jnp.linalg.norm(H_prev)
             norm_H = jnp.linalg.norm(H)
 
+            Lambda_TrF, sigma = self.eval(_p, _w, H)
+
             metrics_to_log = {
                 "Rel. Change": diff,
                 "Norm H": norm_H,
                 "det H": det_H,
+                "Λ Tr F": Lambda_TrF / (2 * np.pi),
+                "σ(Λ Tr F)": sigma / (2 * np.pi),
             }
 
             log_parts = [f"{name}: {value.item():.4e}" for name, value in metrics_to_log.items()]
@@ -1076,3 +1024,98 @@ class HarmonicBundle:
             key, _ = jax.random.split(key)
 
         return H
+
+class HarmonicForm(HarmonicBundle):
+
+    def __init__(self, metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys=None):
+        super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
+      # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
+        self.family_ids = [2,6,8,22,40,42,45,49]
+        # self.n_harmonic = len(self.family_ids)
+        self.n_harmonic = 1
+
+    def preimage_monomials(self, q_basis_element):
+        return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
+    
+    def partition_of_unity(self, p):
+        p_c = math_utils.to_complex(p)[:len(self.monad_map_power_matrix)]
+        exp_arg = jnp.real(p_c * jnp.conjugate(p_c))
+        p_abs_sq = jnp.sum(exp_arg)
+        w = jnp.exp(-exp_arg / p_abs_sq)
+        return w / jnp.sum(w)
+    
+    def monad_map_preimage(self, p):
+        r"""
+        Preimage of monad map, giving smooth sections of $C^{\infty}(X; B)
+        s.t. f(preimage) = quotient_mono(p) for each quotient mono in the basis. 
+        This is $\hat{\mu}$ in the LES. 
+        """
+        _preimage_monomials = vmap(self.preimage_monomials)(self.quotient_basis)
+        _preimage_coeffs = self.partition_of_unity(p)
+        mono_eval = poly_utils.monomial_evaluate_log(p, _preimage_monomials)
+        return jnp.expand_dims(_preimage_coeffs, axis=(0,)) * mono_eval
+        
+    def del_bar_section_B(self, p):
+        del_bar_mu = curvature.del_bar_z(p, self.monad_map_preimage)
+        pb = self.pb_fn(math_utils.to_complex(p))
+        return jnp.einsum("...hav, ...uv->...hau", del_bar_mu, jnp.conjugate(pb))
+
+    @partial(jax.jit, static_argnums=(0,))
+    def H1XV_representatives(self, p):
+        """
+        Representatives of the $H^1(X;V)$ cohomology
+        """
+        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        nu = self.del_bar_section_B(p)
+        # project onto subbundle
+        nu = jnp.delete(nu, patch_idx, axis=-2, assume_unique_indices=True)
+        # nu = jnp.delete(nu, 0, axis=-2, assume_unique_indices=True)
+
+        # select families for testing
+        return jnp.take(nu, np.asarray(self.family_ids), axis=0)
+
+
+    @partial(jax.jit, static_argnums=(0,))
+    def yukawa_couplings(self, p):
+        p_c = math_utils.to_complex(p)
+        weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(p_c)
+
+        dQdz = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p_c, self.dQdz_monomials, self.dQdz_coeffs)
+        Omega = vmap(self.Omega_fn)(p_c, jnp.expand_dims(dQdz,1))
+
+        nu = vmap(self.H1XV_representatives)(p)  # [..., h^1_V, rank_V, cy_dim]
+        
+        contraction = jnp.einsum('...ijk, ...xyz, ...aix, ...bjy, ...ckz -> ...abc',
+                   self.eps_3d, self.eps_3d, nu, nu, nu)
+        contraction = jnp.squeeze(contraction)
+
+        kappa_abc = jnp.expand_dims(Omega**2, axis=((1,2,3))) * contraction
+        
+        kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc
+        int_kappa_abc = jnp.mean(kappa_integrand, axis=0)
+
+        return int_kappa_abc
+
+    def yukawa_couplings_batched(self, p, batch_size=16384, kappa_dtype=np.float32):
+        n = 0
+        kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
+        n_chunks = p.shape[0] // batch_size
+        data = jnp.array_split(p, n_chunks)
+        for t, _p in enumerate(tqdm(data, total=len(data))):
+            B = _p.shape[0]
+            _kappa = self.yukawa_couplings(_p)
+            kappa = kappa = math_utils.online_update_array(kappa, _kappa, n, B)
+            n += B
+        return kappa
+    
+    def harmonic_reps(self, p, params):
+        p_c = math_utils.to_complex(p)
+        pb = self.pb_fn(p_c)
+        xi_ambient = self.H1XV_representatives(p)  # [..., h^1_V, rank_V, cy_dim]
+        correction_ambient = curvature.del_bar_z(p, self.section_V_network, params)
+        form_correction = jnp.einsum('...hai,...ji->...haj', correction_ambient, jnp.conj(pb))
+        eta = xi + form_connection
+        return eta
+
+    def codifferential_eta(self, p, pb, params):
+        g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
