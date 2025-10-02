@@ -1003,7 +1003,7 @@ class GenDonaldson(HarmonicBundle):
             diff = jnp.linalg.norm(H - H_prev) / jnp.linalg.norm(H_prev)
             norm_H = jnp.linalg.norm(H)
 
-            Lambda_TrF, sigma = self.eval(_p, _w, H)
+            Lambda_TrF, sigma = self.eval(_p[:batch_size//2], _w[:batch_size//2], H)
 
             metrics_to_log = {
                 "Rel. Change": diff,
