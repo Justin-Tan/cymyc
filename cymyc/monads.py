@@ -349,7 +349,7 @@ class HarmonicBundle:
 
 
     def TrF_correction(self, p, pb, params):
-        F = self.curvature_form_fn(p, pb, params)
+        F = self.curvature_correction(p, pb, params)
         Tr_eta = jnp.einsum("...aaij->...ij", F)
 
         return Tr_eta
@@ -362,7 +362,10 @@ class HarmonicBundle:
 
     @partial(jax.jit, static_argnums=(0,))
     def codifferential_TrF(self, p, pb, params):
-
+        """
+        Used to sanity-check harmonicity of Tr F.
+        `params`: parameters for the endomorphism network
+        """
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         TrF = self.TrF_correction(p, pb, params)
         del_z_TrF = curvature.del_z(p, self.TrF_correction, False, pb, params)  # [\mu, \bar{\nu}, \kappa]
@@ -529,7 +532,7 @@ class HarmonicBundle:
         h = h_lr + h_diag
         return h
 
-    def endomorphism_network(self, p, params, normalise_det=False):
+    def endomorphism_network(self, p, params):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
@@ -538,7 +541,38 @@ class HarmonicBundle:
         """
         f = self.conformal_fn(p)
         h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
-        normalise_det = True
+        # TODO
+        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
+                                      self._N_sb, normalise_det=False, n_frames=self.n_frames,
+                                      low_rank_approx=self.lr_approx)
+        tsb = self.twisted_section_basis(p)
+        H_fs_V = self.fubini_study_metric_twist_V(p)
+        tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
+
+        if self.lr_approx > 0:
+            M, D = coeffs
+            h = self.low_rank_reconstruct(M, D, tsb, tsb_dual)
+        else:  # full dense matrix
+            h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+
+        log_h_raw = h
+        # Project to sl(n,C)
+        tr = jnp.trace(log_h_raw)
+        log_h = log_h_raw - tr / self.rank_V * jnp.eye(self.rank_V, dtype=self.cdtype)
+
+        # Matrix exponential -> unit determinant endomorphism
+        h = jax.scipy.linalg.expm(log_h)
+        return h * jnp.exp(f)
+
+    def _endomorphism_network(self, p, params, normalise_det=True):
+        r"""
+        Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
+        a global function), which parameterise the section via a linear combination of a section of 
+        $V$ tensored by a dual section.
+        $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
+        """
+        f = self.conformal_fn(p)
+        h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
         # TODO
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
                                       self._N_sb, normalise_det=False, n_frames=self.n_frames,
@@ -589,6 +623,10 @@ class HarmonicBundle:
         F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
         ym_energy = F_sq / 2.
 
+        codiff_TrF = vmap(self.codifferential_TrF, in_axes=(0,0,None))(p, pbs, params)
+        abs_codiff = jnp.mean(jnp.abs(codiff_TrF), axis=-1)        
+        codiff_mean = jnp.mean(abs_codiff * w) / vol_Omega
+
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
         Lambda_F_sq = jnp.einsum("...ab, ...bc->..ac", g_tr_F, g_tr_F)
         Tr_Lambda_F_sq = jnp.einsum("...aa->...", Lambda_F_sq)
@@ -603,7 +641,7 @@ class HarmonicBundle:
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
-                'YM energy': jnp.mean(w * ym_energy) / vol_Omega}
+                'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean}
 
     def loss_breakdown_conformal(self, data, params):
         
@@ -831,6 +869,139 @@ class HarmonicBundle:
         utils.save_logs(storage, self.name, 'FIN')
         return _params, storage
 
+
+    def _wrap_conformal_fn(self, conf_params):
+        # Freeze current conformal network as a pure callable for endomorphism updates/eval
+        return lambda p: self.conformal_rescale_network(p, conf_params)
+
+    def fit_alternating(self,
+                        data_path,
+                        epochs: int = 32,
+                        batch_size: int = 512,
+                        lr_conf: float = 1e-4,
+                        lr_endo: float = 1e-4,
+                        inner_conf: int = 16,
+                        inner_endo: int = 1,
+                        shuffle_rng = np.random.default_rng(),
+                        name: str = None,
+                        ckpt_conf: dict = None,
+                        ckpt_endo: dict = None):
+
+        self.name = f"HYM_alt_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
+        self.eval_interval = 1
+        self.save_interval = 8
+        self.eval_interval_t = 512
+
+        storage = defaultdict(list)
+        logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
+        data_path = os.path.join(data_path, 'dataset.npz')
+        os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
+        logger.info(f'Dataset: {data_path}')
+
+        A_train, A_val, train_loader, val_loader, psi = dataloading.initialize_loaders_train(
+            shuffle_rng, data_path, batch_size, logger=logger)
+        dataset_size = A_train[0].shape[0]
+
+        # slope normalization
+        vol = jnp.mean(A_train[1])
+        if self._slope is not None:
+            self._slope *= vol
+
+        try:
+            device = jax.devices('gpu')[0]
+        except Exception:
+            print("gpu not detected, falling back to cpu.")
+            device = jax.devices('cpu')[0]
+
+        # models
+        key = jax.random.key(42)
+        key, k_conf, k_endo = jax.random.split(key, 3)
+
+        # conformal network
+        self.n_units = [48, 48, 48]
+        conf_model = models.LearnedVector_spectral_nn(self.n_homo_coords, self.ambient, self.n_units)
+        tx_conf = optax.chain(optax.clip(1.0), optax.adamw(learning_rate=lr_conf))
+        conf_params, conf_opt_state, _ = create_train_state(k_conf, conf_model, tx_conf, data_dim=self.n_homo_coords * 2)
+
+        # endomorphism (coeff) network
+        self.n_units_harmonic = [48, 48, 48]
+        coeff_model = models.CholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
+                                             matrix_dim=self._N_sb, n_frames=self.n_frames,
+                                             low_rank_approx=self.lr_approx)
+        tx_endo = optax.chain(optax.clip(1.0), optax.adamw(learning_rate=lr_endo))
+        endo_params, endo_opt_state, _ = create_train_state(k_endo, coeff_model, tx_endo, data_dim=self.n_homo_coords * 2)
+
+        # optional restore
+        if ckpt_conf is not None:
+            conf_params, conf_opt_state = utils.load_ckpt(conf_params, conf_opt_state, ckpt_conf['params'], ckpt_conf['opt'])
+        if ckpt_endo is not None:
+            endo_params, endo_opt_state = utils.load_ckpt(endo_params, endo_opt_state, ckpt_endo['params'], ckpt_endo['opt'])
+
+        # logs
+        logger.info("Conformal model params: %d", sum(x.size for x in jax.tree_util.tree_leaves(conf_params)))
+        logger.info(conf_model.tabulate(k_conf, jnp.ones([1, self.n_homo_coords * 2])))
+        logger.info("Endomorphism model params: %d", sum(x.size for x in jax.tree_util.tree_leaves(endo_params)))
+        logger.info(coeff_model.tabulate(k_endo, jnp.ones([1, self.n_homo_coords * 2])))
+
+        # training
+        t0 = time.time()
+        with jax.default_device(device):
+            for epoch in range(epochs):
+
+                # validation
+                if epoch % self.eval_interval == 0:
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                    p, w, _ = val_data
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                    val_data = (p, pb, w)
+
+                    # freeze conformal fn for eval with current conf params
+                    self.conformal_fn = self._wrap_conformal_fn(conf_params)
+                    storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope)
+
+                # get fresh train loader after first epoch
+                if epoch > 0:
+                    train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
+
+                # alternating blocks
+                wrapped = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size // batch_size,
+                               colour='green', mininterval=0.1)
+
+                for t, batch in enumerate(wrapped):
+                    p, w, _ = batch
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                    data = (p, pb, w)
+
+                    # 1) K_conf conformal updates
+                    for _ in range(inner_conf):
+                        conf_params, conf_opt_state, loss_conf = hym._train_step(
+                            data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal
+                        )
+
+                    # freeze conformal for endo updates
+                    self.conformal_fn = self._wrap_conformal_fn(conf_params)
+
+                    # 2) K_endo endomorphism updates
+                    for _ in range(inner_endo):
+                        endo_params, endo_opt_state, loss_endo = hym._train_step(
+                            data, endo_params, endo_opt_state, tx_endo, self.objective_function
+                        )
+
+                    if t % self.eval_interval_t == 0:
+                        storage["train_loss_conf"].append(loss_conf.item())
+                        storage["train_loss_endo"].append(loss_endo.item())
+                        wrapped.set_postfix_str(f"conf: {loss_conf:.5f} | endo: {loss_endo:.5f}", refresh=False)
+
+                if epoch % self.save_interval == 0:
+                    utils.basic_ckpt({'conf': conf_params, 'endo': endo_params},
+                                     {'conf': conf_opt_state, 'endo': endo_opt_state},
+                                     self.name, f'{epoch}')
+
+        utils.basic_ckpt({'conf': conf_params, 'endo': endo_params},
+                         {'conf': conf_opt_state, 'endo': endo_opt_state},
+                         self.name, 'FIN')
+        utils.save_logs(storage, self.name, 'FIN')
+        return {'conf': conf_params, 'endo': endo_params}, storage
 
 class GenDonaldson(HarmonicBundle):
 
