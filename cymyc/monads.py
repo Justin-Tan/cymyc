@@ -621,6 +621,7 @@ class HarmonicBundle:
         
         loss = self.objective_function(data, params)
         p, pbs, w = data
+        vol_Omega = jnp.mean(w)
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
@@ -638,13 +639,12 @@ class HarmonicBundle:
         codiff_mean = jnp.mean(abs_codiff * w) / vol_Omega
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
-        Lambda_F_sq = jnp.einsum("...ab, ...bc->..ac", g_tr_F, g_tr_F)
+        Lambda_F_sq = jnp.einsum("...ab, ...bc->...ac", g_tr_F, g_tr_F)
         Tr_Lambda_F_sq = jnp.einsum("...aa->...", Lambda_F_sq)
         F_sq = jnp.einsum("...abuv, ...bcuv->...acuv", F, F)
         g_tr_F_sq = jnp.einsum("...vu, ...abuv->...ab", g_inv, F_sq)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
-        vol_Omega = jnp.mean(w)
         Tr_F_g = vmap(jnp.trace)(g_tr_F)
         Tr_F_sq_g = vmap(jnp.trace)(g_tr_F_sq)
 
@@ -982,10 +982,21 @@ class HarmonicBundle:
                     train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
 
                 # alternating blocks
-                wrapped = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size // batch_size,
-                               colour='green', mininterval=0.1)
+                pbar = tqdm(desc=f"Epoch {epoch} [alt]",
+                            total=dataset_size // batch_size,
+                            dynamic_ncols=True, leave=False, colour='green',
+                            mininterval=0.1)
 
-                for t, batch in enumerate(wrapped):
+                last_conf = None
+                last_endo = None
+
+                def _postfix():
+                    c = f"{last_conf:.5f}" if last_conf is not None else "—"
+                    e = f"{last_endo:.5f}" if last_endo is not None else "—"
+                    return f"conf: {c} | endo: {e}"
+
+
+                for t, batch in enumerate(train_loader):
                     p, w, _ = batch
                     pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     data = (p, pb, w)
@@ -995,6 +1006,8 @@ class HarmonicBundle:
                         conf_params, conf_opt_state, loss_conf = hym._train_step(
                             data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal
                         )
+                        last_conf = loss_conf.item()
+                        pbar.set_postfix_str(_postfix(), refresh=False)
 
                     # freeze conformal for endo updates
                     self.conformal_fn = self._wrap_conformal_fn(conf_params)
@@ -1004,11 +1017,24 @@ class HarmonicBundle:
                         endo_params, endo_opt_state, loss_endo = hym._train_step(
                             data, endo_params, endo_opt_state, tx_endo, self.objective_function
                         )
+                        last_endo = loss_endo.item()
+                        pbar.set_postfix_str(_postfix(), refresh=False)
 
                     if t % self.eval_interval_t == 0:
                         storage["train_loss_conf"].append(loss_conf.item())
                         storage["train_loss_endo"].append(loss_endo.item())
-                        wrapped.set_postfix_str(f"conf: {loss_conf:.5f} | endo: {loss_endo:.5f}", refresh=False)
+
+                        val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                        p, w, _ = val_data
+                        pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                        val_data = (p, pb, w)
+
+                        # freeze conformal fn for eval with current conf params
+                        self.conformal_fn = self._wrap_conformal_fn(conf_params)
+                        storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope)
+
+                    pbar.update(1)
+                pbar.close()
 
                 if epoch % self.save_interval == 0:
                     utils.basic_ckpt({'conf': conf_params, 'endo': endo_params},
