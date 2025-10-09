@@ -47,9 +47,9 @@ class HarmonicBundle:
 
         # specify monad data
         # CHANGE THIS
-        self.rank_V = 3
-        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
-        self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
+        self.rank_V = 2
+        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.line_bundle_B = (1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
 
@@ -106,9 +106,9 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        self.monad_map_power_matrix = self.monad_map_power_matrix_AG  # DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
-        self.lr_approx = min(48, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
