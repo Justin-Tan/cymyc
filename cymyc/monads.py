@@ -380,12 +380,22 @@ class HarmonicBundle:
 
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params):
-        #(p, pb, w) = data
+        (p, pb, w) = data
         #vol_Omega = jnp.mean(w)
-        loss = hym.objective_function_implicit_slope_V(data, params, 
-                                                       self.trace_free_curvature_correction,
-                                                       self._metric_fn, self.section_metric_network, 
-                                                       self.rank_V)
+        # loss = hym.objective_function_implicit_slope_V(data, params, 
+        #                                                self.trace_free_curvature_correction,
+        #                                                self._metric_fn, self.section_metric_network, 
+        #                                                self.rank_V)
+        g = vmap(self._metric_fn)(p)
+        g_inv = jnp.linalg.inv(g)
+        F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None))(p,
+                pb, params)
+        H = vmap(self.section_metric_network, in_axes=(0,None))(p, params)
+
+        F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
+        F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
+        ym_energy = jnp.abs(F_sq) / 2.
+        return jnp.mean(w * ym_energy) / jnp.mean(w)
         return loss
 
     def conformal_rescale_network(self, p, params):
@@ -638,10 +648,18 @@ class HarmonicBundle:
         Tr_F_g = vmap(jnp.trace)(g_tr_F)
         Tr_F_sq_g = vmap(jnp.trace)(g_tr_F_sq)
 
+        H_ut = vmap(self.untwisted_metric, in_axes=(0,None))(p, params)
+        tr_H_ut = vmap(jnp.trace)(H_ut)
+        upper_bound_var = hym.objective_function_implicit_slope_V(data, params,
+                                                       self.trace_free_curvature_correction,
+                                                       self._metric_fn, self.section_metric_network,
+                                                       self.rank_V)
+
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
-                'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean}
+                'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean,
+                'Tr_H_untwist': jnp.mean(w * tr_H_ut) / vol_Omega, 'upper_bound_var': upper_bound_var}
 
     def loss_breakdown_conformal(self, data, params):
         
