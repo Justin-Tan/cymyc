@@ -402,9 +402,10 @@ class HarmonicBundle:
         f = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), activation=self.activation)
         return f
 
-    def conformal_change(self, p, params):
+    def conformal_change(self, p, params, endo_params):
         pb = self.pb_fn(math_utils.to_complex(p))
-        xi = self.ddbar_log_det_H_0(p, pb)
+        xi = self.ddbar_log_det_H(p, pb, endo_params)
+        # xi = self.ddbar_log_det_H_0(p, pb)
         # xi = self.TrF_H_0(p)
         # xi = curvature.ricci_form_kahler(p, self.fs_metric_fn, pb)
         ddbar_f = self.del_z_del_z_bar(p, self.conformal_rescale_network, params)
@@ -412,11 +413,11 @@ class HarmonicBundle:
         return xi + self.rank_V * ddbar_f
 
     @partial(jax.jit, static_argnums=(0,))
-    def codifferential_TrF_conformal(self, p, pb, params):
+    def codifferential_TrF_conformal(self, p, pb, params, endo_params):
 
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
-        TrF = self.conformal_change(p, params)
-        del_z_TrF = curvature.del_z(p, self.conformal_change, False, params)  # [\mu, \bar{\nu}, \kappa]
+        TrF = self.conformal_change(p, params, endo_params)
+        del_z_TrF = curvature.del_z(p, self.conformal_change, False, params, endo_params)  # [\mu, \bar{\nu}, \kappa]
         del_z_TrF = jnp.einsum("...iju, ...ku->...ijk", del_z_TrF, pb)
 
         Gamma_holo = curvature.christoffel_symbols_kahler(p, self._metric_fn, pb)  # [a, \kappa, b]
@@ -426,10 +427,12 @@ class HarmonicBundle:
         return -codiff
 
     @partial(jax.jit, static_argnums=(0,))
-    def objective_function_conformal(self, data, params, MAX_NORM=20.):
+    def objective_function_conformal(self, data, params, endo_params, 
+                                     MAX_NORM=20.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        codiff = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None))(p, pb, params)
+        codiff = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None,None))(p, pb, 
+            params, endo_params)
         codiff = jnp.squeeze(codiff)  # [..., i]
 
         # g_pred = vmap(self._metric_fn)(p)
@@ -465,6 +468,15 @@ class HarmonicBundle:
         F_H_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
         return jnp.einsum("...aaij->...ij", F_H_0)
     
+    def ddbar_log_det_H(self, p, pb, endo_params):
+        hess = self.del_z_del_z_bar(p, self.log_det_H, False, endo_params)
+        return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
+
+    def log_det_H(self, p, endo_params):
+        H = self.section_metric_network(p, endo_params)
+        s, logdet = jnp.linalg.slogdet(H)
+        return logdet + 1j * jnp.pi * (s < 0)
+
     def ddbar_log_det_H_0(self, p, pb):
         hess = self.del_z_del_z_bar(p, self.log_det_H_0)
         return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
@@ -617,11 +629,13 @@ class HarmonicBundle:
     def int_dVol_Omega(f, w, vol_w):
         return jnp.mean(f * w) / vol_w
 
-    def loss_breakdown(self, data, params):
+    def loss_breakdown(self, data, params, conf_params):
         
         loss = self.objective_function(data, params)
         p, pbs, w = data
         vol_Omega = jnp.mean(w)
+
+        conf_loss = self.objective_function_conformal(data, conf_params, params)
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
@@ -659,10 +673,11 @@ class HarmonicBundle:
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
                 'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean,
-                'Tr_H_untwist': jnp.mean(w * tr_H_ut) / vol_Omega, 'upper_bound_var': upper_bound_var}
+                'Tr_H_untwist': jnp.mean(w * tr_H_ut) / vol_Omega, 'upper_bound_var': upper_bound_var,
+                'conformal_loss': conf_loss}
 
     def loss_breakdown_conformal(self, data, params):
-        
+
         loss = self.objective_function_conformal(data, params)
         p, pb, w = data
         f = vmap(self.conformal_rescale_network, in_axes=(0,None))(p, params)
@@ -686,12 +701,12 @@ class HarmonicBundle:
                 '|∂† Tr F|^2': codiff_norm / vol_Omega, 'Var[Λ Tr F]': var}
 
     def callback(self, val_data, params, storage, logger, epoch, t0,
-                 slope: float = None, conformal_train=False):
+                 slope: float = None, conformal_train=False, conf_params=None):
         
         if conformal_train is True:
             loss_breakdown_dict = self.loss_breakdown_conformal(val_data, params)
         else:
-            loss_breakdown_dict = self.loss_breakdown(val_data, params)
+            loss_breakdown_dict = self.loss_breakdown(val_data, params, conf_params)
 
         loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
         summary = jax.tree_util.tree_map(lambda x: x.item(), loss_breakdown_dict)
@@ -975,7 +990,8 @@ class HarmonicBundle:
 
                     # freeze conformal fn for eval with current conf params
                     self.conformal_fn = self._wrap_conformal_fn(conf_params)
-                    storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope)
+                    storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
+                                            conf_params=conf_params)
 
                 # get fresh train loader after first epoch
                 if epoch > 0:
@@ -1004,7 +1020,8 @@ class HarmonicBundle:
                     # 1) K_conf conformal updates
                     for _ in range(inner_conf):
                         conf_params, conf_opt_state, loss_conf = hym._train_step(
-                            data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal
+                            data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal,
+                            aux_params=endo_params
                         )
                         last_conf = loss_conf.item()
                         pbar.set_postfix_str(_postfix(), refresh=False)
@@ -1031,7 +1048,8 @@ class HarmonicBundle:
 
                         # freeze conformal fn for eval with current conf params
                         self.conformal_fn = self._wrap_conformal_fn(conf_params)
-                        storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope)
+                        storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
+                                                conf_params=conf_params)
 
                     pbar.update(1)
                 pbar.close()

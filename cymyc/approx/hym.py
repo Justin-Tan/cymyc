@@ -182,8 +182,8 @@ def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn,
     return params, opt_state, loss
 
 @partial(jax.jit, static_argnums=(3,4,))
-def _train_step(data, params, opt_state, optimizer, objective_fn):
-    loss, grads = jax.value_and_grad(objective_fn, argnums=1)(data, params)
+def _train_step(data, params, opt_state, optimizer, objective_fn, aux_params=None):
+    loss, grads = jax.value_and_grad(objective_fn, argnums=1)(data, params, aux_params)
     param_updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, param_updates)
     return params, opt_state, loss
