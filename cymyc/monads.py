@@ -379,7 +379,7 @@ class HarmonicBundle:
 
 
     @partial(jax.jit, static_argnums=(0,))
-    def objective_function(self, data, params):
+    def objective_function(self, data, params, aux_params=None):
         (p, pb, w) = data
         #vol_Omega = jnp.mean(w)
         # loss = hym.objective_function_implicit_slope_V(data, params, 
@@ -469,7 +469,7 @@ class HarmonicBundle:
         return jnp.einsum("...aaij->...ij", F_H_0)
     
     def ddbar_log_det_H(self, p, pb, endo_params):
-        hess = self.del_z_del_z_bar(p, self.log_det_H, False, endo_params)
+        hess = self.del_z_del_z_bar(p, self.log_det_H, endo_params)
         return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
 
     def log_det_H(self, p, endo_params):
@@ -497,21 +497,19 @@ class HarmonicBundle:
         """
         if patch_idx is None:
             patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        # patch_idx = 0
         proj = jnp.eye(self.rank_V, dtype=self.cdtype)
         f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
         col = -f_p / f_p[patch_idx]  # f_p[patch_idx] should usually be 1.
         col = jnp.delete(col, patch_idx, assume_unique_indices=True)
         return jnp.insert(proj, patch_idx, col, axis=-1)
 
-    def twisted_section_basis(self, p, ambient=False):
+    def twisted_section_basis(self, p, ambient=False, patch_idx=None):
         r"""
         Holomorphic sections of twisted bundle $V \otimes O_X(k)$,
         expressed in a local frame - typically Z_i^k. 
         """
         p_c = math_utils.to_complex(p)
-        patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
-        # patch_idx = 0
+        if patch_idx is None: patch_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
 
         Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
@@ -519,18 +517,32 @@ class HarmonicBundle:
 
         section_matrix = jax.scipy.linalg.block_diag(*blocks)
         # quotient
-        section_matrix = jnp.delete(section_matrix, 0, axis=-1, assume_unique_indices=True)
+        idx = patch_idx * len(Ok_monomials) + patch_idx 
+        section_matrix = jnp.delete(section_matrix, idx, axis=-1, assume_unique_indices=True)
 
         if ambient is True: return section_matrix
         embedding_matrix = self.embedding_matrix_twisted(p, patch_idx)
         return embedding_matrix @ section_matrix
 
-    def fubini_study_metric_twist_V(self, p, inv=False):
-        tsb = self.twisted_section_basis(p)
+    def fubini_study_metric_twist_V(self, p, inv=False, patch_idx=None):
+        tsb = self.twisted_section_basis(p, patch_idx=patch_idx)
         fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
         if inv is True: return fs_inv
         fs = jnp.linalg.inv(fs_inv)
         return fs
+
+    def transition_function(self, p, old_frame_idx, new_frame_idx):
+        """
+        Move from local trivialisation `old_frame_idx` to 
+        `new_frame_idx`
+        """
+        T = jnp.eye(self.rank_V, dtype=self.cdtype)
+        f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
+        col = -f_p / f_p[new_frame_idx]  # f_p[patch_idx] should usually be 1.
+        col = jnp.delete(col, new_frame_idx, assume_unique_indices=True)
+        T = jnp.insert(T, new_frame_idx, col, axis=-1)
+        T = jnp.delete(T, old_frame_idx, assume_unique_indices=True, axis=1)
+        return T
 
     def section_metric_network(self, p, params, scale=1.):
         r"""
@@ -629,13 +641,14 @@ class HarmonicBundle:
     def int_dVol_Omega(f, w, vol_w):
         return jnp.mean(f * w) / vol_w
 
-    def loss_breakdown(self, data, params, conf_params):
+    def loss_breakdown(self, data, params, conf_params=None):
         
         loss = self.objective_function(data, params)
         p, pbs, w = data
         vol_Omega = jnp.mean(w)
 
-        conf_loss = self.objective_function_conformal(data, conf_params, params)
+        if conf_params is not None:
+            conf_loss = self.objective_function_conformal(data, conf_params, params)
 
         h = vmap(self.endomorphism_network, in_axes=(0,None))(p, params)
         g = vmap(self._metric_fn)(p)
@@ -673,8 +686,8 @@ class HarmonicBundle:
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
                 'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean,
-                'Tr_H_untwist': jnp.mean(w * tr_H_ut) / vol_Omega, 'upper_bound_var': upper_bound_var,
-                'conformal_loss': conf_loss}
+                'Tr_H_untwist': jnp.mean(w * tr_H_ut) / vol_Omega, 'upper_bound_var': upper_bound_var}
+                # 'conformal_loss': conf_loss}
 
     def loss_breakdown_conformal(self, data, params):
 
