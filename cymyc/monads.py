@@ -945,8 +945,8 @@ class HarmonicBundle:
         bundle_metric_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
                 matrix_dim=self._N_sb, n_frames=self.n_frames, low_rank_approx=self.lr_approx)
 
-        _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
-        # _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
+        # _params, _opt_state, _ = create_train_state(_k, bundle_metric_model, _tx, data_dim=self.n_homo_coords * 2)
+        _params, _opt_state, _ = self._create_train_state(_k, bundle_metric_model, _tx)
         if ckpt is not None:
             _params, _opt_state = utils.load_ckpt(_params, _opt_state, ckpt['params'], ckpt['opt'])
         param_count = sum(x.size for x in jax.tree_util.tree_leaves(_params))
