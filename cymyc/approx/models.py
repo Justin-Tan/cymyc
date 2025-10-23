@@ -271,7 +271,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         return M, D
 
     @nn.compact
-    def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
+    def __call2__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
         """
         Forward pass that outputs a complex Hermitian matrix via the LU decomposition.
 
@@ -328,11 +328,11 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         return self.postprocess(jnp.squeeze(out))
     
     @nn.compact
-    def __call2__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
+    def __call__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
         # constant matrix version   
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
-        return self.postprocess(out)
+        return self.postprocess(jnp.squeeze(out))
 
 @partial(jit, static_argnums=(2,3,4,5,6,7))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
