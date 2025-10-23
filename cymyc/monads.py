@@ -1,5 +1,5 @@
 import jax
-jax.config.update("jax_enable_x64", True)
+# jax.config.update("jax_enable_x64", True)
 
 import numpy as np  # original CPU-backed NumPy
 import jax.numpy as jnp
@@ -636,7 +636,7 @@ class HarmonicBundle:
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         P = self.H0XV_transition_matrix(p, frame_idx, 0)
-        P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
+        P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1], dtype=self.cdtype))  # jnp.linalg.inv(P)
         _H = P_inv @ self.dagger(P_inv)
         # fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
         fs_inv = jnp.einsum("...am, ...mn, ...bn->...ba", tsb, _H, jnp.conjugate(tsb))
