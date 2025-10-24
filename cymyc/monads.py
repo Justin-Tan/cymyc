@@ -113,7 +113,7 @@ class HarmonicBundle:
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
-        
+        self.n_units = [48,48,48]
         if (self.n_hyper > 1) or (len(self.ambient) > 1):
             self.integration_weights_fn = partial(alg_geo._integration_weights_cicy, 
                 dQdz_monomials=self.dQdz_monomials, dQdz_coefficients=self.dQdz_coeffs,                              
@@ -453,7 +453,12 @@ class HarmonicBundle:
         return loss
 
     def conformal_rescale_network(self, p, params):
-        f = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), activation=self.activation)
+        if (self.n_hyper > 1) or (len(self.ambient) > 1):
+            model_class = models.LearnedVector_spectral_nn_CICY
+        else:
+            model_class = models.LearnedVector_spectral_nn
+        f = model_class(p.shape[-1]//2, tuple(self.ambient), self.n_units,
+                        n_out=1, activation=self.activation).apply({'params': params}, p)
         return f
 
     def conformal_change(self, p, params, endo_params=None):
