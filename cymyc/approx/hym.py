@@ -100,7 +100,7 @@ def objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn
 
 @partial(jax.jit, static_argnums=(2,3,4))
 def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, 
-        bundle_metric_fn, d=1.):
+        bundle_metric_fn, d=1., aux_params=None):
     """
     Ref: (A7) https://arxiv.org/pdf/2110.12483 for d=1.
     """
@@ -109,7 +109,8 @@ def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_
     g = vmap(metric_fn)(p)  # frozen params
     g_inv = jnp.linalg.inv(g)
     # H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
-    F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    # F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    F = vmap(curvature_form_fn, in_axes=(0, 0, None, None))(p, pbs, params, aux_params)
     # F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
     # F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
     # F_sq = F_sq / jnp.mean(F_sq)
