@@ -329,6 +329,14 @@ class HarmonicBundle:
         F = self.curvature_form_V(p, self.section_metric_network, params)
         return F
 
+    @partial(jax.jit, static_argnums=(0,))
+    def _curvature_form(self, p, params, conf_params=None, conformal_factor=False, frame_idx=None):
+        H_fn = jax.tree_util.Partial(self.section_metric_network, conf_params=conf_params,
+                conformal_factor=conformal_factor, frame_idx=frame_idx)
+        F = self.curvature_form_V(p, H_fn, params)
+        return F
+
+
     def curvature_form_fn(self, p, pb, params):
         F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
         ddbar_h = self.del_z_del_z_bar(p, self.endomorphism_network, params)
@@ -336,35 +344,40 @@ class HarmonicBundle:
         return F_H0 + ddbar_h
 
     @partial(jax.jit, static_argnums=(0,))
-    def curvature_correction(self, p, pb, params, conf_params=None):
-        F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
+    def curvature_correction(self, p, pb, params, conf_params=None, frame_idx=None):
+        H_fn_i = jax.tree_util.Partial(self.fubini_study_metric_twist_V, frame_idx=frame_idx, transport=False)
+        F_H0 = self.curvature_form_V(p, H_fn_i)
+        # F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
         d_correction = curvature.del_bar_z(p, self.exact_piece, False, params,
-                                           self.fubini_study_metric_twist_V, conf_params)
+                                           H_fn_i, conf_params, frame_idx)
+                                           # self.fubini_study_metric_twist_V, conf_params)
         d_correction = jnp.einsum("...abiu, ...ju->...abij", d_correction, jnp.conjugate(pb))
         return F_H0 + d_correction
     
-    def trace_free_curvature_correction(self, p, pb, params, conf_params=None):
-        F = self.curvature_correction(p, pb, params, conf_params)
+    def trace_free_curvature_correction(self, p, pb, params, conf_params=None, frame_idx=None):
+        F = self.curvature_correction(p, pb, params, conf_params, frame_idx)
         TrF = jnp.einsum("...aaij->...ij", F)
         trace_part = 1./self.rank_V * jnp.einsum("...ij, ...ab->...abij", 
             TrF, jnp.eye(self.rank_V, dtype=TrF.dtype))
         return F - trace_part
 
 
-    def exact_piece(self, p, params, H0_metric_fn, conf_params=None):
+    def exact_piece(self, p, params, H0_metric_fn, conf_params=None, frame_idx=None):
         pb = self.pb_fn(math_utils.to_complex(p))
-        h = self.endomorphism_network(p, params, conf_params)  # h^b_a
+        # h = self.endomorphism_network(p, params, conf_params)  # h^b_a
+        h = self.endomorphism_network(p, params, conf_params, frame_idx=frame_idx)  # h^b_a
 
-        dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params)  # h^b_{ai}
+        # dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params)  # h^b_{ai}
+        dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params, False, frame_idx)  # h^b_{ai}
         dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
         A_0 = self.connection_form_V(p, H0_metric_fn)
 
         _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
         _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
         holo_cov_der_h = dh + _A1 - _A2
-        # exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
-        exact = jnp.linalg.solve(h, holo_cov_der_h.reshape(self.rank_V, -1))
-        exact = exact.reshape(self.rank_V, self.rank_V, self.cy_dim)
+        exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
+        #exact = jnp.linalg.solve(h, holo_cov_der_h.reshape(self.rank_V, -1))
+        #exact = exact.reshape(self.rank_V, self.rank_V, self.cy_dim)
         return exact
 
     def _section_basis_V(self, p):
@@ -432,7 +445,7 @@ class HarmonicBundle:
 
 
     @partial(jax.jit, static_argnums=(0,))
-    def objective_function(self, data, params, aux_params=None):
+    def objective_function(self, data, params, aux_params=None, frame_idx=None):
         (p, pb, w) = data
         #vol_Omega = jnp.mean(w)
         #loss = hym.objective_function_implicit_slope_V(data, params, 
@@ -440,15 +453,25 @@ class HarmonicBundle:
         #                                               self._metric_fn, self.section_metric_network, 
         #                                               self.rank_V)
         #return loss
+        MAX_YM_NORM = 500.
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
-        F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
-                pb, params, aux_params)
-        H = vmap(self.section_metric_network, in_axes=(0,None,None))(p, params, aux_params)
+        F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None,None))(p,
+                pb, params, aux_params, frame_idx)
+        H = vmap(self.section_metric_network, in_axes=(0,None,None,None,None))(p, params, aux_params, False, frame_idx)
 
-        F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
-        F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
+        #F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
+        #F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
+        F_sq = jnp.einsum("...abij, ...cdkl, ...db, ...ac->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
+        F_sq = jnp.einsum("...ijkl, ...ki, ...jl->...", F_sq, g_inv, g_inv)
+
         ym_energy = jnp.abs(F_sq) / 2.
+
+        valid = jnp.logical_and(jnp.isfinite(ym_energy), ym_energy < MAX_YM_NORM)
+        valid_w = w * valid.astype(w.dtype)
+        # ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
+        # return ym_energy
+        return jnp.mean(valid_w * ym_energy) / jnp.mean(valid_w)
         return jnp.mean(w * ym_energy) / jnp.mean(w)
         return loss
 
@@ -528,12 +551,12 @@ class HarmonicBundle:
         F_H_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
         return jnp.einsum("...aaij->...ij", F_H_0)
     
-    def ddbar_log_det_H(self, p, pb, endo_params, conformal_factor=True):
-        hess = self.del_z_del_z_bar(p, self.log_det_H, endo_params, conformal_factor)
+    def ddbar_log_det_H(self, p, pb, endo_params, conf_params=None, conformal_factor=False):
+        hess = self.del_z_del_z_bar(p, self.log_det_H, endo_params, conf_params, conformal_factor)
         return jnp.einsum("...iu, ...uv, ...jv->...ij", pb, hess, jnp.conjugate(pb))
 
-    def log_det_H(self, p, endo_params, conformal_factor=True):
-        H = self.section_metric_network(p, endo_params, conformal_factor)
+    def log_det_H(self, p, endo_params, conf_params, conformal_factor=False):
+        H = self.section_metric_network(p, endo_params, conf_params, conformal_factor=conformal_factor)
         s, logdet = jnp.linalg.slogdet(H)
         return logdet + 1j * jnp.pi * (s < 0)
 
@@ -577,7 +600,6 @@ class HarmonicBundle:
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
 
-        #patch_idx = 0
         Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
         blocks = [Ok_monomials] * self.rank_B
@@ -587,6 +609,7 @@ class HarmonicBundle:
         # choose ambient coord used to trivialise O(k); for P^n pick the dominant homo coord
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=frame_idx, k=self.twisting_degree)
         col_to_delete = frame_idx * n_Ok + trivial_idx
+        # col_to_delete = 0
         # print(col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
@@ -596,7 +619,8 @@ class HarmonicBundle:
         return emb @ section_matrix
 
 
-    def twisted_section_basis_in_frame(self, p, frame_idx=None, drop_patch_idx=None, ambient: bool = False):
+    def twisted_section_basis_in_frame(self, p, frame_idx=None, drop_patch_idx=None,
+            ambient: bool = False):
         """
         Sections of V ⊗ O(k) expressed in a fixed fiber frame 'frame_idx',
         dropping exactly one column: the trivial monomial Z_{frame_idx}^k
@@ -617,10 +641,9 @@ class HarmonicBundle:
         n_Ok = Ok_monomials.shape[0]
 
         # trivial monomial position relative to the chosen frame
-        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=frame_idx, k=self.twisting_degree)
-        # trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
+        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         col_to_delete = drop_patch_idx * n_Ok + trivial_idx
-        # print(col_to_delete)
+        print('tsb: deleting', col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
         if ambient is True:
@@ -628,15 +651,56 @@ class HarmonicBundle:
         emb = self.embedding_matrix_twisted(p, frame_idx)  # rows in 'frame_idx'
         return emb @ section_matrix
 
-    def fubini_study_metric_twist_V(self, p, inv=False, frame_idx=None):
-        tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
+
+    def H0XV_transition_matrix(self, p, new_frame_idx=0):
+        """
+        `old_frame_idx`: Basis vector to be added when transitioning between patches. 
+                         This is `i` for a transition `P_{i->j}`. This is the dynamic frame.
+        `new_frame_idx`: Basis vector to be removed when transitioning between patches. 
+                         This is `j` for a transition `P_{i->j}`. This is the default frame.
+        """
+        old_frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        P = jnp.eye(self._N_sb, dtype=self.cdtype)
+        Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
+        n_Ok = len(Ok_powers)
+
+        old_trivial_idx = self._trivial_mono_index_Pn(Ok_powers, old_frame_idx, self.twisting_degree)
+        new_trivial_idx = self._trivial_mono_index_Pn(Ok_powers, new_frame_idx, self.twisting_degree)
+
+        scatter = vmap(self._trivial_mono_index_Pn, in_axes=(None,0,None))(Ok_powers, jnp.arange(self.rank_B), self.twisting_degree)
+        elim_cols_idx = jnp.arange(self.rank_B) * n_Ok + scatter
+        elim_cols_idx = jnp.delete(elim_cols_idx, old_frame_idx, assume_unique_indices=True)
+        #print('info added at rows',elim_cols_idx)
+
+        # choose ambient coord used to trivialise O(k); for P^n pick the dominant homo coord
+        old_elim_col = old_frame_idx * n_Ok + old_trivial_idx  # free to choose this
+        new_elim_col = new_frame_idx * n_Ok + new_trivial_idx  # this is frame-independent
+
+        col = jnp.zeros(self._N_sb, dtype=self.cdtype)
+
+        for i, elim_idx in enumerate(elim_cols_idx):
+            shift = old_elim_col < elim_idx
+            col = col.at[elim_idx-shift].set(-1)
+        
+        #print('inserting', old_elim_col)
+        P = jnp.insert(P, old_elim_col, col, axis=1)
+        #print('deleting', new_elim_col)
+        P = jnp.delete(P, new_elim_col, axis=1, assume_unique_indices=True)
+        return P
+
+    def fubini_study_metric_twist_V(self, p, inv=False, frame_idx=None, transport=False):
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        P = self.H0XV_transition_matrix(p, frame_idx, 0)
-        P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1], dtype=self.cdtype))  # jnp.linalg.inv(P)
-        _H = P_inv @ self.dagger(P_inv)
-        # fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
-        fs_inv = jnp.einsum("...am, ...mn, ...bn->...ba", tsb, _H, jnp.conjugate(tsb))
+        # tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
+        default_idx = 0
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+
+        if transport is True: 
+            P = self.H0XV_transition_matrix(p, default_idx)
+            _H = P @ self.dagger(P)
+            fs_inv = jnp.einsum("...am, ...mn, ...bn->...ba", tsb, _H, jnp.conjugate(tsb))
+        else:
+            fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
         if inv is True: return fs_inv
         fs = jnp.linalg.inv(fs_inv)
         return fs
@@ -661,40 +725,8 @@ class HarmonicBundle:
         T = jnp.delete(T, old_frame_idx, assume_unique_indices=True, axis=1)
         return T
 
-    def H0XV_transition_matrix(self, p, frame_idx, old_patch_idx):
-        """
-        `frame_idx`:     Frame basis vector on $V \otimes L^k$ being solved for/eliminated. We
-                         are transitioning to this patch.
-        `old_patch_idx`: Basis vector to be added when transitioning between patches. 
-                         This is `i` for a transition `P_{i->j}`.
-        """
-        f_p = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
-        relation_col = -f_p / f_p[old_patch_idx]  # f_p[patch_idx] should usually be 1.
-        relation_col = jnp.delete(relation_col, old_patch_idx, assume_unique_indices=True)
-        P = jnp.eye(self._N_sb, dtype=self.cdtype)
-        Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
-        n_Ok = len(Ok_powers)
 
-        triv_ref = self._trivial_mono_index_Pn(Ok_powers, coord_j=frame_idx, k=self.twisting_degree)
-        
-        elim_cols_idx = jnp.arange(self.rank_B) * n_Ok + triv_ref
-        elim_cols_idx = jnp.delete(elim_cols_idx, old_patch_idx, assume_unique_indices=True)
-        # choose ambient coord used to trivialise O(k); for P^n pick the dominant homo coord
-        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, frame_idx, self.twisting_degree)
-        old_elim_col = old_patch_idx * n_Ok + trivial_idx
-        new_elim_col = frame_idx * n_Ok + trivial_idx
-
-        col = jnp.zeros(self._N_sb, dtype=self.cdtype)
-        
-        for i, elim_idx in enumerate(elim_cols_idx):
-            shift = old_elim_col < elim_idx
-            col = col.at[elim_idx-shift].set(relation_col[i])
-
-        P = jnp.insert(P, old_elim_col, col, axis=1)
-        P = jnp.delete(P, new_elim_col, axis=1, assume_unique_indices=True)
-        return P
-
-    def section_metric_network(self, p, params, conf_params=None, conformal_factor=True, scale=1.):
+    def section_metric_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Returns a smooth section of $Sym(V^* \otimes V^*$) from basis of sections for $V$.
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient), self._N_sb)
@@ -702,10 +734,10 @@ class HarmonicBundle:
         G_inv = jnp.einsum("...am, ...mn, ...bn->...ab", jnp.conj(tsb), coeffs, tsb)
         return jnp.linalg.inv(G_inv)
         """
-        h = self.endomorphism_network(p, params, conf_params, conformal_factor)
-        H0 = self.fubini_study_metric_twist_V(p)
+        h = self.endomorphism_network(p, params, conf_params, conformal_factor, frame_idx)
+        H0 = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
         H = jnp.einsum("...ca, ...cb->...ab", h, H0)
-        return H * scale
+        return H
 
     @staticmethod
     def low_rank_reconstruct(M, D, S, S_dual):
@@ -716,7 +748,7 @@ class HarmonicBundle:
         h = h_lr + h_diag
         return h
 
-    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True):
+    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
@@ -728,8 +760,19 @@ class HarmonicBundle:
         coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
                                       self._N_sb, normalise_det=False, n_frames=self.n_frames,
                                       low_rank_approx=self.lr_approx)
-        tsb = self.twisted_section_basis(p)
-        H_fs_V = self.fubini_study_metric_twist_V(p)
+
+        # CHANGES
+        default_idx = 0
+        if frame_idx is None:
+            frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        # P = self.H0XV_transition_matrix(p, default_idx)
+        # P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
+        # coeffs = P @ coeffs @ self.dagger(P)
+        # coeffs = jnp.einsum("...xm, ...mn, ...yn->...xy", P, coeffs, jnp.conj(P))
+        # CHANGES
+        # tsb = self.twisted_section_basis(p)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+        H_fs_V = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx, transport=False)
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
 
         if self.lr_approx > 0:
@@ -746,9 +789,7 @@ class HarmonicBundle:
         # Matrix exponential -> unit determinant endomorphism
         h = jax.scipy.linalg.expm(log_h)
 
-        print('wefewfew',conf_params)
-        if conformal_factor is True:
-            print(conf_params)
+        if conformal_factor is True and conf_params is not None:
             f = self.conformal_rescale_network(p, conf_params)
             return h * jnp.exp(f)
         return h
@@ -769,10 +810,11 @@ class HarmonicBundle:
         frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         P = self.H0XV_transition_matrix(p, frame_idx, 0)
         P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
-        # coeffs = P @ coeffs @ self.dagger(P)
         coeffs = P_inv @ coeffs @ self.dagger(P_inv)
 
-        tsb = self.twisted_section_basis(p)
+        # tsb = self.twisted_section_basis(p)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=frame_idx,
+                monomial_elim=0)
         H_fs_V = self.fubini_study_metric_twist_V(p)
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
 
@@ -815,6 +857,8 @@ class HarmonicBundle:
         F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
         F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
         ym_energy = F_sq / 2.
+        MAX_YM_NORM = 100.
+        # ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
 
         codiff_TrF = vmap(self.codifferential_TrF, in_axes=(0,0,None,None))(p, pbs, params, conf_params)
         abs_codiff = jnp.mean(jnp.abs(codiff_TrF), axis=-1)        
@@ -1706,22 +1750,6 @@ class HarmonicForm(HarmonicBundle):
         t0 = time.time()
         with jax.default_device(device):
             for epoch in range(epochs):
-
-                if epoch % self.eval_interval == 0: 
-                    val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
-                    p, w, _ = val_data
-                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
-                    val_data = (p, pb, w)
-                    storage = self.callback(
-                        val_data, _params, storage, logger, epoch, t0, self._slope)
-
-                if epoch > 0: 
-                    train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
-
-                wrapped_train_loader = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
-                                            colour='green', mininterval=0.1)
-
-                for t, data in enumerate(wrapped_train_loader):
                     p, w, _ = data
                     pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     data = (p, pb, w)
