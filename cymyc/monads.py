@@ -813,40 +813,6 @@ class HarmonicBundle:
             return h * jnp.exp(f)
         return h
 
-    def _endomorphism_network(self, p, params, normalise_det=False):
-        r"""
-        Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
-        a global function), which parameterise the section via a linear combination of a section of 
-        $V$ tensored by a dual section.
-        $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
-        """
-        #f = self.conformal_fn(p)
-        h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
-        # TODO
-        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
-                                      self._N_sb, normalise_det=False, n_frames=self.n_frames,
-                                      low_rank_approx=self.lr_approx)
-        frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        P = self.H0XV_transition_matrix(p, frame_idx, 0)
-        P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
-        coeffs = P_inv @ coeffs @ self.dagger(P_inv)
-
-        # tsb = self.twisted_section_basis(p)
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=frame_idx,
-                monomial_elim=0)
-        H_fs_V = self.fubini_study_metric_twist_V(p)
-        tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
-
-        # full dense matrix
-        h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
-
-        # h = h + h0
-        if normalise_det is True:
-            _, logdet = jnp.linalg.slogdet(h)
-            scale = jnp.exp(-logdet / self.rank_V)
-            h = scale * h
-        return h# * jnp.exp(f)
-
     def untwisted_metric(self, p, params, conf_params):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
         H_K = self.section_metric_network(p, params, conf_params)
@@ -1174,7 +1140,7 @@ class HarmonicBundle:
         self.name = f"HYM_alt_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
         self.eval_interval = 1
         self.save_interval = 8
-        self.eval_interval_t = 512
+        self.eval_interval_t = 256
 
         storage = defaultdict(list)
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
@@ -1230,6 +1196,7 @@ class HarmonicBundle:
         # training
         t0 = time.time()
         with jax.default_device(device):
+
             for epoch in range(epochs):
 
                 # validation
@@ -1245,6 +1212,7 @@ class HarmonicBundle:
                 # get fresh train loader after first epoch
                 if epoch > 0:
                     train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
+                    iter_loader = iter(train_loader)
 
                 # alternating blocks
                 pbar = tqdm(desc=f"Epoch {epoch} [alt]",
@@ -1261,43 +1229,52 @@ class HarmonicBundle:
                     return f"conf: {c} | endo: {e}"
 
 
-                for t, batch in enumerate(train_loader):
-                    p, w, _ = batch
-                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
-                    data = (p, pb, w)
+                # for t, batch in enumerate(train_loader):
+                t = 0
+                while True:
+                    try:
+                        # 1) K_conf conformal updates
+                        for _ in range(inner_conf):
+                            p, w, _ = next(iter_loader)
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            data = (p, pb, w)
+                            conf_params, conf_opt_state, loss_conf = hym._train_step(
+                                data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal,
+                                aux_params=endo_params
+                            )
+                            last_conf = loss_conf.item()
+                            pbar.set_postfix_str(_postfix(), refresh=False)
+                            pbar.update(1)
 
-                    # 1) K_conf conformal updates
-                    for _ in range(inner_conf):
-                        conf_params, conf_opt_state, loss_conf = hym._train_step(
-                            data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal,
-                            aux_params=endo_params
-                        )
-                        last_conf = loss_conf.item()
-                        pbar.set_postfix_str(_postfix(), refresh=False)
+                        # 2) K_endo endomorphism updates
+                        for _ in range(inner_endo):
+                            p, w, _ = next(iter_loader)
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            data = (p, pb, w)
+                            endo_params, endo_opt_state, loss_endo = hym._train_step(
+                                data, endo_params, endo_opt_state, tx_endo, self.objective_function,
+                                aux_params=conf_params
+                            )
+                            last_endo = loss_endo.item()
+                            pbar.set_postfix_str(_postfix(), refresh=False)
+                            pbar.update(1)
 
+                        t += 1
+                        if t % self.eval_interval_t == 0:
+                            storage["train_loss_conf"].append(loss_conf.item())
+                            storage["train_loss_endo"].append(loss_endo.item())
 
-                    # 2) K_endo endomorphism updates
-                    for _ in range(inner_endo):
-                        endo_params, endo_opt_state, loss_endo = hym._train_step(
-                            data, endo_params, endo_opt_state, tx_endo, self.objective_function,
-                            aux_params=conf_params
-                        )
-                        last_endo = loss_endo.item()
-                        pbar.set_postfix_str(_postfix(), refresh=False)
+                            val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                            p, w, _ = val_data
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            val_data = (p, pb, w)
 
-                    if t % self.eval_interval_t == 0:
-                        storage["train_loss_conf"].append(loss_conf.item())
-                        storage["train_loss_endo"].append(loss_endo.item())
+                            storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
+                                                    conf_params=conf_params)
+                    except StopIteration:
+                        break
 
-                        val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
-                        p, w, _ = val_data
-                        pb = vmap(self.pb_fn)(math_utils.to_complex(p))
-                        val_data = (p, pb, w)
-
-                        storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
-                                                conf_params=conf_params)
-
-                    pbar.update(1)
+                    # pbar.update(1)
                 pbar.close()
 
                 if epoch % self.save_interval == 0:
