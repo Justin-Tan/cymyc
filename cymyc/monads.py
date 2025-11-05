@@ -47,9 +47,9 @@ class HarmonicBundle:
 
         # specify monad data
         # CHANGE THIS
-        self.rank_V = 2
-        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
-        self.line_bundle_B = (1,1,1)  # (1,1,1,1)
+        self.rank_V = 3
+        self.twisting_degree = 1  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
 
@@ -106,7 +106,8 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
@@ -660,7 +661,7 @@ class HarmonicBundle:
         # trivial monomial position relative to the chosen frame
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         col_to_delete = drop_patch_idx * n_Ok + trivial_idx
-        print('tsb: deleting', col_to_delete)
+        #print('tsb: deleting', col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
         if ambient is True:
@@ -813,14 +814,22 @@ class HarmonicBundle:
             return h * jnp.exp(f)
         return h
 
-    def untwisted_metric(self, p, params, conf_params):
+    @partial(jax.jit, static_argnums=(0,))
+    def untwisted_metric(self, p, params, conf_params=None):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
         H_K = self.section_metric_network(p, params, conf_params)
         det_H_K = jnp.linalg.det(H_K)
         return H_K * (det_H_K)**(-1./self.rank_V)
 
-    def untwisted_curvature(self, p, params, conf_params):
-        return self.curvature_form_V(p, self.untwisted_metric, params, conf_params)
+    @partial(jax.jit, static_argnums=(0,))
+    def untwisted_curvature(self, p, params, conf_params=None):
+        if conf_params is not None:
+            untwisted_metric = jax.tree_util.Partial(self.untwisted_metric, 
+                    conf_params=conf_params)
+        else:
+            untwisted_metric = self.untwisted_metric
+
+        return self.curvature_form_V(p, untwisted_metric, params)
 
     @staticmethod
     def int_dVol_Omega(f, w, vol_w):
@@ -1195,6 +1204,7 @@ class HarmonicBundle:
 
         # training
         t0 = time.time()
+        iter_loader = iter(train_loader)
         with jax.default_device(device):
 
             for epoch in range(epochs):
@@ -1364,7 +1374,9 @@ class GenDonaldson(HarmonicBundle):
     
 
     def fibre_metric_from_H(self, p, H, aux=False):
-        S = self.twisted_section_basis(p)
+        default_idx = 0
+        # S = self.twisted_section_basis(p)
+        S = self.twisted_section_basis_in_frame(p, None, default_idx)
         S_c = jnp.conjugate(S)
         G_inv = jnp.einsum("mn, ...am, ...bn->...ab", H, S, S_c)
         G = jnp.einsum("...ba->...ab", jnp.linalg.inv(G_inv))  # G_{a \overline{b}}
@@ -1386,8 +1398,8 @@ class GenDonaldson(HarmonicBundle):
     @partial(jax.jit, static_argnums=(0,))
     def _G_update(self, p, H, w):
         p = math_utils.to_real(p)
-        # G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None))(p, H, True)
-        G, S, S_c = vmap(self.fibre_metric_from_H_basis_change, in_axes=(0,None,None))(p, H, True)
+        G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None))(p, H, True)
+        # G, S, S_c = vmap(self.fibre_metric_from_H_basis_change, in_axes=(0,None,None))(p, H, True)
         integrand = jnp.einsum("...am, ...ab, ...bn->...mn", S, G, S_c)
         
         delta_T = jnp.mean(integrand * jnp.expand_dims(w, axis=(1,2)), axis=0)
