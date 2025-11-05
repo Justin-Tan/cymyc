@@ -48,7 +48,7 @@ class HarmonicBundle:
         # specify monad data
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 1  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
@@ -107,7 +107,8 @@ class HarmonicBundle:
 
         # CHANGE THIS
         # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_AG
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
@@ -456,6 +457,7 @@ class HarmonicBundle:
     def objective_function(self, data, params, aux_params=None, frame_idx=None):
         (p, pb, w) = data
         #vol_Omega = jnp.mean(w)
+        
         """
         loss = hym.objective_function_implicit_slope_V(data, params, 
                                                        self.curvature_correction,
@@ -709,7 +711,7 @@ class HarmonicBundle:
     def fubini_study_metric_twist_V(self, p, inv=False, frame_idx=None, transport=False):
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        # tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
+        #tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
         default_idx = 0
         tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
 
@@ -888,6 +890,7 @@ class HarmonicBundle:
                 'var_H_ut': var_H_ut, 'var_H': var_H}
 
         if conf_params is not None:
+            f = vmap(self.conformal_rescale_network, in_axes=(0,None))(p, conf_params)
             conf_loss = self.objective_function_conformal(data, conf_params, params)
             codiff_TrF_conf = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None))(p, pbs, conf_params)
             abs_codiff_conf = jnp.mean(jnp.abs(codiff_TrF_conf), axis=-1)        
@@ -895,7 +898,7 @@ class HarmonicBundle:
             TrF = vmap(self.conformal_change, in_axes=(0,None))(p, conf_params)
             Lambda_TrF = jnp.einsum("...vu, ...uv->... ", g_inv, TrF)
             report.update({'conformal_loss': conf_loss, "Λ Tr F": jnp.mean(w * Lambda_TrF) / vol_Omega,
-                           'codiff_conf': codiff_mean_conf})
+                           'codiff_conf': codiff_mean_conf, "f_avg": jnp.mean(w * f) / vol_Omega})
 
         return report
 
