@@ -1039,7 +1039,6 @@ class HarmonicFull(Harmonic):
         g_inv = jnp.linalg.inv(g_pred)  # g^{\bar{\nu} \mu}
         # No squeeze
         integrand = jnp.einsum('...iua, ...jvb, ...uv, ...ab->...ij', eta, jnp.conjugate(eta), g_pred, g_inv)
-        vol_Omega = jnp.mean(weights)
 
         det_g = jnp.squeeze(jnp.real(jnp.linalg.det(g_pred)))
         vol_g = jnp.mean(det_g * weights / dVol_Omega)

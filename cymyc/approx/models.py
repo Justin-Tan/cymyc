@@ -303,7 +303,8 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
 
-        # out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
+        out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
+        """
         # frame-dependent branching
         def head_fn(i):
             return lambda mdl, x: mdl.heads[i](x)
@@ -323,6 +324,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
 
         out = nn.switch(frame_idx, branches, self, x)
         if self.low_rank_approx > 0: return out
+        """
         return self.postprocess(jnp.squeeze(out))
     
     @nn.compact
@@ -330,7 +332,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         # constant matrix version   
         n_out_cholesky = self.matrix_dim * self.matrix_dim
         out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
-        return self.postprocess(out)
+        return self.postprocess(jnp.squeeze(out))
 
 @partial(jit, static_argnums=(2,3,4,5,6,7))
 def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 

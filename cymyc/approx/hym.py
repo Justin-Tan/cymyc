@@ -100,7 +100,7 @@ def objective_function_implicit_slope(data, params, curvature_form_fn, metric_fn
 
 @partial(jax.jit, static_argnums=(2,3,4))
 def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_fn, 
-        bundle_metric_fn, d=1.):
+        bundle_metric_fn, d=1., aux_params=None):
     """
     Ref: (A7) https://arxiv.org/pdf/2110.12483 for d=1.
     """
@@ -109,7 +109,8 @@ def objective_function_implicit_slope_V(data, params, curvature_form_fn, metric_
     g = vmap(metric_fn)(p)  # frozen params
     g_inv = jnp.linalg.inv(g)
     # H = vmap(bundle_metric_fn, in_axes=(0,None))(p, params)
-    F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    # F = vmap(curvature_form_fn, in_axes=(0, 0, None))(p, pbs, params)
+    F = vmap(curvature_form_fn, in_axes=(0, 0, None, None))(p, pbs, params, aux_params)
     # F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
     # F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
     # F_sq = F_sq / jnp.mean(F_sq)
@@ -182,8 +183,8 @@ def train_step(data, params, opt_state, optimizer, curvature_form_fn, metric_fn,
     return params, opt_state, loss
 
 @partial(jax.jit, static_argnums=(3,4,))
-def _train_step(data, params, opt_state, optimizer, objective_fn):
-    loss, grads = jax.value_and_grad(objective_fn, argnums=1)(data, params)
+def _train_step(data, params, opt_state, optimizer, objective_fn, aux_params=None):
+    loss, grads = jax.value_and_grad(objective_fn, argnums=1)(data, params, aux_params)
     param_updates, opt_state = optimizer.update(grads, opt_state, params)
     params = optax.apply_updates(params, param_updates)
     return params, opt_state, loss

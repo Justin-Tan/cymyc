@@ -176,9 +176,10 @@ def load_ckpt(init_params, init_opt_state, params_path, opt_state_path):
     return params, opt_state
 
     
-def load_params(init_params, params_path):
+def load_params(init_params, params_path, nested=False):
     from jax.tree_util import tree_map
     from flax import serialization
+    from collections import defaultdict
 
     # Note content of initial states is not used except for shape/dtype assertion checking.
     with open(params_path, "rb") as handle:
@@ -187,19 +188,29 @@ def load_params(init_params, params_path):
     # should probably match dtypes as well
     init_params_shapes = tree_map(np.shape, init_params)
     loaded_params_shapes = tree_map(np.shape, params_dict)
-    n_units = frozenset([_v for v in init_params_shapes.values() for _v in v.values()])
-    n_units_ckpt = frozenset([_v for v in loaded_params_shapes.values() for _v in v.values()])
 
-    """
-    n_units = [init_params[k]['kernel'].shape[-1] for k in sorted(init_params.keys()) if 'kernel' in
-            init_params[k].keys()][:-1]
-    n_units_ckpt = [params_dict[k]['kernel'].shape[-1] for k in sorted(params_dict.keys()) if 'kernel' in
-            params_dict[k].keys()][:-1]
-    """
-    # n_units_ckpt = [params_dict[k]['kernel'].shape[-1] for k in params_dict.keys()][:-1]
-    assert n_units == n_units_ckpt, f'Configured ({n_units}) and loaded ({n_units_ckpt}) models do not match.'
+    if nested is False:
+        n_units = frozenset([_v for v in init_params_shapes.values() for _v in v.values()])
+        n_units_ckpt = frozenset([_v for v in loaded_params_shapes.values() for _v in v.values()])
 
-    params = serialization.from_state_dict(init_params, params_dict)
+        """
+        n_units = [init_params[k]['kernel'].shape[-1] for k in sorted(init_params.keys()) if 'kernel' in
+                init_params[k].keys()][:-1]
+        n_units_ckpt = [params_dict[k]['kernel'].shape[-1] for k in sorted(params_dict.keys()) if 'kernel' in
+                params_dict[k].keys()][:-1]
+        """
+        # n_units_ckpt = [params_dict[k]['kernel'].shape[-1] for k in params_dict.keys()][:-1]
+        assert n_units == n_units_ckpt, f'Configured ({n_units}) and loaded ({n_units_ckpt}) models do not match.'
+
+        params = serialization.from_state_dict(init_params, params_dict)
+    else:
+        params = defaultdict(dict)
+        for k in init_params.keys():
+            n_units = frozenset([_v for v in init_params_shapes[k].values() for _v in v.values()])
+            n_units_ckpt = frozenset([_v for v in loaded_params_shapes[k].values() for _v in v.values()])
+            assert n_units == n_units_ckpt, f'Configured ({n_units}) and loaded ({n_units_ckpt}) models do not match.'
+            params[k] = serialization.from_state_dict(init_params[k], params_dict[k])
+
     return params
 
 
