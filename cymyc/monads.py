@@ -48,7 +48,7 @@ class HarmonicBundle:
         # specify monad data
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 1  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
         self.line_bundle_C = (4,)
 
@@ -107,8 +107,8 @@ class HarmonicBundle:
 
         # CHANGE THIS
         # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_AG
+        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
@@ -663,7 +663,7 @@ class HarmonicBundle:
         # trivial monomial position relative to the chosen frame
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         col_to_delete = drop_patch_idx * n_Ok + trivial_idx
-        #print('tsb: deleting', col_to_delete)
+        print('tsb: deleting', col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
         if ambient is True:
@@ -853,9 +853,10 @@ class HarmonicBundle:
         #F_sq = jnp.einsum("...abij, ...cdkl, ...ca, ...bd->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
         #F_sq = jnp.einsum("...ijkl, ...ki, ...jl->...", F_sq, g_inv, g_inv)
 
+        k = p.shape[0]//2
         codiff_TrF = vmap(self.codifferential_TrF, in_axes=(0,0,None,None))(p, pbs, params, conf_params)
         abs_codiff = jnp.mean(jnp.abs(codiff_TrF), axis=-1)        
-        codiff_mean = jnp.mean(abs_codiff * w) / vol_Omega
+        codiff_mean = jnp.mean(abs_codiff * w) / jnp.mean(w)
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
         Lambda_F0 = g_tr_F
