@@ -46,11 +46,13 @@ class HarmonicBundle:
         self._metric_fn = metric_fn
 
         # specify monad data
+        # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 1  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
-        self.line_bundle_C = (4,)
+        self.line_bundle_A_twist = 1
+        self.default_idx = 0
 
 
         self.rank_B = len(self.line_bundle_B)
@@ -60,7 +62,10 @@ class HarmonicBundle:
         self.mb2 = jnp.asarray(poly_utils.monomial_basis(ambient, 2))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3))
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4))
-        self.degree_to_monomial_basis = {1: self.mb1, 2: self.mb2, 3: self.mb3, 4: self.mb4}
+        self.mb5 = jnp.asarray(poly_utils.monomial_basis(ambient, 5))
+        self.mb6 = jnp.asarray(poly_utils.monomial_basis(ambient, 6))
+        self.degree_to_monomial_basis = {1: self.mb1, 2: self.mb2, 3: self.mb3, 4: self.mb4, 5: self.mb5,
+                6: self.mb6}
         self.n_linear = len(self.mb1)
 
         self.n_hyper = self.ambient_dim - self.cy_dim
@@ -109,7 +114,11 @@ class HarmonicBundle:
         # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
         self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
-        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
+
+        n_quotient = 1
+        if self.line_bundle_A_twist > 0:
+            n_quotient += self.rank_B
+        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - n_quotient
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
@@ -609,10 +618,19 @@ class HarmonicBundle:
 
     def _trivial_mono_index_Pn(self, Ok_powers, coord_j, k):
         # Find idx of Z_j^k in the monomial power matrix
+        if self.line_bundle_A_twist > 0:
+            return self._trivial_mono_index_mult_Pn(Ok_powers, coord_j, k-1)
         target = jnp.zeros((Ok_powers.shape[1],), Ok_powers.dtype).at[coord_j].set(k)
         mask = jnp.all(Ok_powers == target, axis=1)
         # assumes target exists; fall back to 0 if not found
         return jnp.where(mask, size=1, fill_value=0)[0][0]
+
+    @staticmethod
+    def _trivial_mono_index_mult_Pn(Ok_powers, coord_j, k):
+        n_coords = Ok_powers.shape[1]
+        target = jnp.zeros((n_coords,), Ok_powers.dtype).at[coord_j].set(k)
+        mask = jnp.all((Ok_powers - target) >= 0, axis=1)
+        return jnp.where(mask, size=n_coords, fill_value=0)[0]
 
     def twisted_section_basis(self, p, frame_idx=None, ambient=False):
 
@@ -712,11 +730,10 @@ class HarmonicBundle:
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         #tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
-        default_idx = 0
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         if transport is True: 
-            P = self.H0XV_transition_matrix(p, default_idx)
+            P = self.H0XV_transition_matrix(p, self.default_idx)
             _H = P @ self.dagger(P)
             fs_inv = jnp.einsum("...am, ...mn, ...bn->...ba", tsb, _H, jnp.conjugate(tsb))
         else:
@@ -783,15 +800,14 @@ class HarmonicBundle:
                                       low_rank_approx=self.lr_approx)
 
         # CHANGES
-        default_idx = 0
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        # P = self.H0XV_transition_matrix(p, default_idx)
+        # P = self.H0XV_transition_matrix(p, self.default_idx)
         # coeffs = P @ coeffs @ self.dagger(P)
         # coeffs = jnp.einsum("...xm, ...mn, ...yn->...xy", P, coeffs, jnp.conj(P))
         # CHANGES
         #tsb = self.twisted_section_basis(p)
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
         H_fs_V = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx, transport=False)
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
 
@@ -1378,9 +1394,8 @@ class GenDonaldson(HarmonicBundle):
     
 
     def fibre_metric_from_H(self, p, H, aux=False):
-        default_idx = 0
         # S = self.twisted_section_basis(p)
-        S = self.twisted_section_basis_in_frame(p, None, default_idx)
+        S = self.twisted_section_basis_in_frame(p, None, self.default_idx)
         S_c = jnp.conjugate(S)
         G_inv = jnp.einsum("mn, ...am, ...bn->...ab", H, S, S_c)
         G = jnp.einsum("...ba->...ab", jnp.linalg.inv(G_inv))  # G_{a \overline{b}}
