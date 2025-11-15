@@ -48,9 +48,9 @@ class HarmonicBundle:
         # specify monad data
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
-        self.rank_V = 3
-        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
-        self.line_bundle_B = (1,1,1,1)  # (1,1,1,1)
+        self.rank_V = 2
+        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.line_bundle_B = (1,1,1)    # (1,1,1,1)
         self.line_bundle_A_twist = 1
         self.default_idx = 0
 
@@ -111,13 +111,11 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
 
-        n_quotient = 1
-        if self.line_bundle_A_twist > 0:
-            n_quotient += self.rank_B
+        n_quotient = math.comb(self.ambient_dim + self.twisting_degree - 1, self.twisting_degree - 1)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - n_quotient
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
@@ -619,18 +617,19 @@ class HarmonicBundle:
     def _trivial_mono_index_Pn(self, Ok_powers, coord_j, k):
         # Find idx of Z_j^k in the monomial power matrix
         if self.line_bundle_A_twist > 0:
-            return self._trivial_mono_index_mult_Pn(Ok_powers, coord_j, k-1)
+            return self._trivial_mono_index_mult_Pn(Ok_powers, coord_j, k)
         target = jnp.zeros((Ok_powers.shape[1],), Ok_powers.dtype).at[coord_j].set(k)
         mask = jnp.all(Ok_powers == target, axis=1)
         # assumes target exists; fall back to 0 if not found
         return jnp.where(mask, size=1, fill_value=0)[0][0]
 
-    @staticmethod
-    def _trivial_mono_index_mult_Pn(Ok_powers, coord_j, k):
+    def _trivial_mono_index_mult_Pn(self, Ok_powers, coord_j, k_twist):
         n_coords = Ok_powers.shape[1]
-        target = jnp.zeros((n_coords,), Ok_powers.dtype).at[coord_j].set(k)
+        target = jnp.zeros((n_coords,), Ok_powers.dtype).at[coord_j].set(1)
         mask = jnp.all((Ok_powers - target) >= 0, axis=1)
-        return jnp.where(mask, size=n_coords, fill_value=0)[0]
+        n_quotient = math.comb(self.ambient_dim + (k_twist-1), (k_twist-1))
+        # return jnp.where(mask, fill_value=0)[0]
+        return jnp.where(mask, size=n_quotient, fill_value=0)[0]
 
     def twisted_section_basis(self, p, frame_idx=None, ambient=False):
 
@@ -681,7 +680,7 @@ class HarmonicBundle:
         # trivial monomial position relative to the chosen frame
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         col_to_delete = drop_patch_idx * n_Ok + trivial_idx
-        print('tsb: deleting', col_to_delete)
+        # print('tsb: deleting', col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
         if ambient is True:
@@ -853,6 +852,7 @@ class HarmonicBundle:
     def int_dVol_Omega(f, w, vol_w):
         return jnp.mean(f * w) / vol_w
 
+    @partial(jax.jit, static_argnums=(0,))
     def loss_breakdown(self, data, params, conf_params=None):
         
         loss = self.objective_function(data, params, conf_params)
@@ -865,9 +865,6 @@ class HarmonicBundle:
         F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
                 pbs, params, conf_params)
         H = vmap(self.section_metric_network, in_axes=(0,None,None))(p, params, conf_params)
-
-        #F_sq = jnp.einsum("...abij, ...cdkl, ...ca, ...bd->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
-        #F_sq = jnp.einsum("...ijkl, ...ki, ...jl->...", F_sq, g_inv, g_inv)
 
         k = p.shape[0]//2
         codiff_TrF = vmap(self.codifferential_TrF, in_axes=(0,0,None,None))(p, pbs, params, conf_params)
@@ -1007,14 +1004,12 @@ class HarmonicBundle:
         key = jax.random.key(42)
         key, _k = jax.random.split(key)
 
-        _tx = optax.adamw(learning_rate=lr)
+        # _tx = optax.adamw(learning_rate=lr)
         grad_threshold = 1.
-        """
         _tx = optax.chain(
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        """
         self.n_units_harmonic = [48,48,48]
         if conformal_fn is not None: self.conformal_fn = conformal_fn
 
@@ -1169,7 +1164,7 @@ class HarmonicBundle:
         self.name = f"HYM_alt_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
         self.eval_interval = 1
         self.save_interval = 8
-        self.eval_interval_t = 256
+        self.eval_interval_t = 512
 
         storage = defaultdict(list)
         logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
@@ -1209,6 +1204,7 @@ class HarmonicBundle:
                                              low_rank_approx=self.lr_approx)
         tx_endo = optax.chain(optax.clip(1.0), optax.adamw(learning_rate=lr_endo))
         endo_params, endo_opt_state, _ = create_train_state(k_endo, coeff_model, tx_endo, data_dim=self.n_homo_coords * 2)
+        # endo_params, endo_opt_state, _ = self._create_train_state(k_endo, coeff_model, tx_endo)
 
         # optional restore
         if ckpt_conf is not None:
@@ -1221,6 +1217,7 @@ class HarmonicBundle:
         logger.info(conf_model.tabulate(k_conf, jnp.ones([1, self.n_homo_coords * 2])))
         logger.info("Endomorphism model params: %d", sum(x.size for x in jax.tree_util.tree_leaves(endo_params)))
         logger.info(coeff_model.tabulate(k_endo, jnp.ones([1, self.n_homo_coords * 2])))
+        # logger.info(coeff_model.tabulate(k_endo))
 
         # training
         t0 = time.time()
