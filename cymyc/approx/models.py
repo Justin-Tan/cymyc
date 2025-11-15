@@ -304,6 +304,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
                 x = self.activation(x)
 
         out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
+       
         """
         # frame-dependent branching
         def head_fn(i):

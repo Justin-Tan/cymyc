@@ -46,11 +46,13 @@ class HarmonicBundle:
         self._metric_fn = metric_fn
 
         # specify monad data
+        # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 2
-        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
-        self.line_bundle_B = (1,1,1)  # (1,1,1,1)
-        self.line_bundle_C = (4,)
+        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.line_bundle_B = (1,1,1)    # (1,1,1,1)
+        self.line_bundle_A_twist = 1
+        self.default_idx = 0
 
 
         self.rank_B = len(self.line_bundle_B)
@@ -60,7 +62,10 @@ class HarmonicBundle:
         self.mb2 = jnp.asarray(poly_utils.monomial_basis(ambient, 2))
         self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3))
         self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4))
-        self.degree_to_monomial_basis = {1: self.mb1, 2: self.mb2, 3: self.mb3, 4: self.mb4}
+        self.mb5 = jnp.asarray(poly_utils.monomial_basis(ambient, 5))
+        self.mb6 = jnp.asarray(poly_utils.monomial_basis(ambient, 6))
+        self.degree_to_monomial_basis = {1: self.mb1, 2: self.mb2, 3: self.mb3, 4: self.mb4, 5: self.mb5,
+                6: self.mb6}
         self.n_linear = len(self.mb1)
 
         self.n_hyper = self.ambient_dim - self.cy_dim
@@ -107,7 +112,11 @@ class HarmonicBundle:
 
         # CHANGE THIS
         self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - 1
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
+
+        n_quotient = math.comb(self.ambient_dim + self.twisting_degree - 1, self.twisting_degree - 1)
+        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - n_quotient
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
@@ -156,7 +165,8 @@ class HarmonicBundle:
         H_inv = jnp.linalg.inv(H)  # \bar{a} b
         pb = self.pb_fn(math_utils.to_complex(p))
         del_H = jnp.einsum("...abu,...iu->...abi", del_H, pb)
-        A = jnp.einsum("...bc, ...abi->...cai", H_inv, del_H)  # A^c_{ai}
+        # A = jnp.einsum("...bc, ...abi->...cai", H_inv, del_H)  # A^c_{ai}
+        A = jnp.einsum("...aci, ...cb->...abi", del_H, H_inv)  # A_{ai}^b
         return A
 
     @partial(jax.jit, static_argnums=(0,2))
@@ -330,9 +340,9 @@ class HarmonicBundle:
         return F
 
     @partial(jax.jit, static_argnums=(0,))
-    def _curvature_form(self, p, params, conf_params=None, conformal_factor=False, frame_idx=None):
+    def _curvature_form(self, p, params, conf_params=None, frame_idx=None):
         H_fn = jax.tree_util.Partial(self.section_metric_network, conf_params=conf_params,
-                conformal_factor=conformal_factor, frame_idx=frame_idx)
+                conformal_factor=True, frame_idx=frame_idx)
         F = self.curvature_form_V(p, H_fn, params)
         return F
 
@@ -345,6 +355,7 @@ class HarmonicBundle:
 
     @partial(jax.jit, static_argnums=(0,))
     def curvature_correction(self, p, pb, params, conf_params=None, frame_idx=None):
+        #return self._curvature_form(p, params, conf_params, frame_idx)
         H_fn_i = jax.tree_util.Partial(self.fubini_study_metric_twist_V, frame_idx=frame_idx, transport=False)
         F_H0 = self.curvature_form_V(p, H_fn_i)
         # F_H0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
@@ -365,17 +376,21 @@ class HarmonicBundle:
     def exact_piece(self, p, params, H0_metric_fn, conf_params=None, frame_idx=None):
         pb = self.pb_fn(math_utils.to_complex(p))
         # h = self.endomorphism_network(p, params, conf_params)  # h^b_a
-        h = self.endomorphism_network(p, params, conf_params, frame_idx=frame_idx)  # h^b_a
+        h = self.endomorphism_network(p, params, conf_params, True, frame_idx=frame_idx)    # h_a^b
 
         # dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params)  # h^b_{ai}
-        dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params, False, frame_idx)  # h^b_{ai}
+        dh = curvature.del_z(p, self.endomorphism_network, False, params, conf_params, True, frame_idx)  # h_{ai}^b
         dh = jnp.einsum("...abu, ...iu->...abi", dh, pb)
-        A_0 = self.connection_form_V(p, H0_metric_fn)
+        A_0 = self.connection_form_V(p, H0_metric_fn)  # A_{ai}^b
 
-        _A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
-        _A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
+        #_A1 = jnp.einsum("...aci, ...cb->...abi", A_0, h)
+        #_A2 = jnp.einsum("...cbi, ...ac->...abi", A_0, h)
+
+        _A1 = jnp.einsum("...ac, ...cbi->...abi", h, A_0)
+        _A2 = jnp.einsum("...cb, ...aci->...abi", h, A_0)
         holo_cov_der_h = dh + _A1 - _A2
-        exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
+        exact = jnp.einsum("...aci, ...cb->...abi", holo_cov_der_h, jnp.linalg.inv(h))
+        # exact = jnp.einsum("...ca, ...abi->...cbi", jnp.linalg.inv(h), holo_cov_der_h)
         #exact = jnp.linalg.solve(h, holo_cov_der_h.reshape(self.rank_V, -1))
         #exact = exact.reshape(self.rank_V, self.rank_V, self.cy_dim)
         return exact
@@ -444,33 +459,45 @@ class HarmonicBundle:
         return codiff
 
 
+
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params, aux_params=None, frame_idx=None):
         (p, pb, w) = data
         #vol_Omega = jnp.mean(w)
-        #loss = hym.objective_function_implicit_slope_V(data, params, 
-        #                                               self.curvature_correction,
-        #                                               self._metric_fn, self.section_metric_network, 
-        #                                               self.rank_V)
-        #return loss
+        
+        """
+        loss = hym.objective_function_implicit_slope_V(data, params, 
+                                                       self.curvature_correction,
+                                                       self._metric_fn, self.section_metric_network, 
+                                                       self.rank_V)
+        return loss
+        """
         MAX_YM_NORM = 500.
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
         F = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None,None))(p,
                 pb, params, aux_params, frame_idx)
-        H = vmap(self.section_metric_network, in_axes=(0,None,None,None,None))(p, params, aux_params, False, frame_idx)
+        Lambda_F0 = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
+        #F = vmap(self.curvature_correction, in_axes=(0,0,None,None,None))(p,
+        #        pb, params, aux_params, frame_idx)
+        # H = vmap(self.fubini_study_metric_twist_V)(p)
+        H = vmap(self.section_metric_network, in_axes=(0,None,None,None,None))(p, params, aux_params, True, frame_idx)
+        Lambda_F0_norm = jnp.einsum("...ca, ...ab, ...cd, ...bd->...", jnp.linalg.inv(H), Lambda_F0, jnp.conj(Lambda_F0), H)
+        energy = jnp.abs(Lambda_F0_norm) / 2.
+        return jnp.mean(w * energy) / jnp.mean(w)
 
         #F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
         #F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
-        F_sq = jnp.einsum("...abij, ...cdkl, ...db, ...ac->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
+        # F_sq = jnp.einsum("...abij, ...cdkl, ...db, ...ac->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
+        F_sq = jnp.einsum("...abij, ...cdkl, ...ca, ...bd->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
         F_sq = jnp.einsum("...ijkl, ...ki, ...jl->...", F_sq, g_inv, g_inv)
 
         ym_energy = jnp.abs(F_sq) / 2.
 
         valid = jnp.logical_and(jnp.isfinite(ym_energy), ym_energy < MAX_YM_NORM)
         valid_w = w * valid.astype(w.dtype)
-        # ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
-        # return ym_energy
+        #ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
+        #return ym_energy
         return jnp.mean(valid_w * ym_energy) / jnp.mean(valid_w)
         return jnp.mean(w * ym_energy) / jnp.mean(w)
         return loss
@@ -589,10 +616,20 @@ class HarmonicBundle:
 
     def _trivial_mono_index_Pn(self, Ok_powers, coord_j, k):
         # Find idx of Z_j^k in the monomial power matrix
+        if self.line_bundle_A_twist > 0:
+            return self._trivial_mono_index_mult_Pn(Ok_powers, coord_j, k)
         target = jnp.zeros((Ok_powers.shape[1],), Ok_powers.dtype).at[coord_j].set(k)
         mask = jnp.all(Ok_powers == target, axis=1)
         # assumes target exists; fall back to 0 if not found
         return jnp.where(mask, size=1, fill_value=0)[0][0]
+
+    def _trivial_mono_index_mult_Pn(self, Ok_powers, coord_j, k_twist):
+        n_coords = Ok_powers.shape[1]
+        target = jnp.zeros((n_coords,), Ok_powers.dtype).at[coord_j].set(1)
+        mask = jnp.all((Ok_powers - target) >= 0, axis=1)
+        n_quotient = math.comb(self.ambient_dim + (k_twist-1), (k_twist-1))
+        # return jnp.where(mask, fill_value=0)[0]
+        return jnp.where(mask, size=n_quotient, fill_value=0)[0]
 
     def twisted_section_basis(self, p, frame_idx=None, ambient=False):
 
@@ -643,7 +680,7 @@ class HarmonicBundle:
         # trivial monomial position relative to the chosen frame
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         col_to_delete = drop_patch_idx * n_Ok + trivial_idx
-        print('tsb: deleting', col_to_delete)
+        # print('tsb: deleting', col_to_delete)
         section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
         if ambient is True:
@@ -691,12 +728,11 @@ class HarmonicBundle:
     def fubini_study_metric_twist_V(self, p, inv=False, frame_idx=None, transport=False):
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        # tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
-        default_idx = 0
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+        #tsb = self.twisted_section_basis(p, frame_idx=frame_idx)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         if transport is True: 
-            P = self.H0XV_transition_matrix(p, default_idx)
+            P = self.H0XV_transition_matrix(p, self.default_idx)
             _H = P @ self.dagger(P)
             fs_inv = jnp.einsum("...am, ...mn, ...bn->...ba", tsb, _H, jnp.conjugate(tsb))
         else:
@@ -736,7 +772,8 @@ class HarmonicBundle:
         """
         h = self.endomorphism_network(p, params, conf_params, conformal_factor, frame_idx)
         H0 = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
-        H = jnp.einsum("...ca, ...cb->...ab", h, H0)
+        # H = jnp.einsum("...ca, ...cb->...ab", h, H0)
+        H = jnp.einsum("...ac, ...cb->...ab", h, H0)
         return H
 
     @staticmethod
@@ -762,16 +799,14 @@ class HarmonicBundle:
                                       low_rank_approx=self.lr_approx)
 
         # CHANGES
-        default_idx = 0
         if frame_idx is None:
             frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        # P = self.H0XV_transition_matrix(p, default_idx)
-        # P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
+        # P = self.H0XV_transition_matrix(p, self.default_idx)
         # coeffs = P @ coeffs @ self.dagger(P)
         # coeffs = jnp.einsum("...xm, ...mn, ...yn->...xy", P, coeffs, jnp.conj(P))
         # CHANGES
-        # tsb = self.twisted_section_basis(p)
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=default_idx)
+        #tsb = self.twisted_section_basis(p)
+        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
         H_fs_V = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx, transport=False)
         tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
 
@@ -779,8 +814,10 @@ class HarmonicBundle:
             M, D = coeffs
             h = self.low_rank_reconstruct(M, D, tsb, tsb_dual)
         else:  # full dense matrix
-            h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+            #h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
+            h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb_dual, coeffs, tsb)
 
+        # return h
         log_h_raw = h
         # Project to sl(n,C)
         tr = jnp.trace(log_h_raw)
@@ -794,53 +831,28 @@ class HarmonicBundle:
             return h * jnp.exp(f)
         return h
 
-    def _endomorphism_network(self, p, params, normalise_det=False):
-        r"""
-        Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
-        a global function), which parameterise the section via a linear combination of a section of 
-        $V$ tensored by a dual section.
-        $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
-        """
-        #f = self.conformal_fn(p)
-        h0 = jnp.eye(self.rank_V, dtype=self.cdtype)
-        # TODO
-        coeffs = models.cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
-                                      self._N_sb, normalise_det=False, n_frames=self.n_frames,
-                                      low_rank_approx=self.lr_approx)
-        frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
-        P = self.H0XV_transition_matrix(p, frame_idx, 0)
-        P_inv = jnp.linalg.solve(P, jnp.eye(P.shape[-1]))  # jnp.linalg.inv(P)
-        coeffs = P_inv @ coeffs @ self.dagger(P_inv)
-
-        # tsb = self.twisted_section_basis(p)
-        tsb = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=frame_idx,
-                monomial_elim=0)
-        H_fs_V = self.fubini_study_metric_twist_V(p)
-        tsb_dual = jnp.einsum("...ab, ...bm->...am", H_fs_V, jnp.conjugate(tsb))
-
-        # full dense matrix
-        h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb, coeffs, tsb_dual)
-
-        # h = h + h0
-        if normalise_det is True:
-            _, logdet = jnp.linalg.slogdet(h)
-            scale = jnp.exp(-logdet / self.rank_V)
-            h = scale * h
-        return h# * jnp.exp(f)
-
-    def untwisted_metric(self, p, params, conf_params):
+    @partial(jax.jit, static_argnums=(0,))
+    def untwisted_metric(self, p, params, conf_params=None):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
         H_K = self.section_metric_network(p, params, conf_params)
         det_H_K = jnp.linalg.det(H_K)
         return H_K * (det_H_K)**(-1./self.rank_V)
 
-    def untwisted_curvature(self, p, params, conf_params):
-        return self.curvature_form_V(p, self.untwisted_metric, params, conf_params)
+    @partial(jax.jit, static_argnums=(0,))
+    def untwisted_curvature(self, p, params, conf_params=None):
+        if conf_params is not None:
+            untwisted_metric = jax.tree_util.Partial(self.untwisted_metric, 
+                    conf_params=conf_params)
+        else:
+            untwisted_metric = self.untwisted_metric
+
+        return self.curvature_form_V(p, untwisted_metric, params)
 
     @staticmethod
     def int_dVol_Omega(f, w, vol_w):
         return jnp.mean(f * w) / vol_w
 
+    @partial(jax.jit, static_argnums=(0,))
     def loss_breakdown(self, data, params, conf_params=None):
         
         loss = self.objective_function(data, params, conf_params)
@@ -854,17 +866,13 @@ class HarmonicBundle:
                 pbs, params, conf_params)
         H = vmap(self.section_metric_network, in_axes=(0,None,None))(p, params, conf_params)
 
-        F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
-        F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
-        ym_energy = F_sq / 2.
-        MAX_YM_NORM = 100.
-        # ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
-
+        k = p.shape[0]//2
         codiff_TrF = vmap(self.codifferential_TrF, in_axes=(0,0,None,None))(p, pbs, params, conf_params)
         abs_codiff = jnp.mean(jnp.abs(codiff_TrF), axis=-1)        
-        codiff_mean = jnp.mean(abs_codiff * w) / vol_Omega
+        codiff_mean = jnp.mean(abs_codiff * w) / jnp.mean(w)
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
+        Lambda_F0 = g_tr_F
         Lambda_F_sq = jnp.einsum("...ab, ...bc->...ac", g_tr_F, g_tr_F)
         Tr_Lambda_F_sq = jnp.einsum("...aa->...", Lambda_F_sq)
         F_sq = jnp.einsum("...abuv, ...bcuv->...acuv", F, F)
@@ -874,7 +882,13 @@ class HarmonicBundle:
         Tr_F_g = vmap(jnp.trace)(g_tr_F)
         Tr_F_sq_g = vmap(jnp.trace)(g_tr_F_sq)
 
+        Lambda_F0_norm = jnp.einsum("...ca, ...ab, ...cd, ...bd->...", jnp.linalg.inv(H), Lambda_F0, jnp.conj(Lambda_F0), H)
+        energy = jnp.abs(Lambda_F0_norm) / 2.
+
         H_ut = vmap(self.untwisted_metric, in_axes=(0,None,None))(p, params, conf_params)
+        H_ut_integrand = jnp.expand_dims(w, (1,2)) * H_ut
+        var_H_ut = jnp.mean(jnp.expand_dims(w, (1,2)) * H_ut**2) / vol_Omega - jnp.mean(H_ut_integrand)**2 / vol_Omega**2
+        var_H = jnp.mean(jnp.expand_dims(w, (1,2)) * H**2) / vol_Omega - jnp.mean(jnp.expand_dims(w, (1,2)) * H)**2 / vol_Omega**2
         tr_H_ut = vmap(jnp.trace)(H_ut)
         upper_bound_var = hym.objective_function_implicit_slope_V(data, params,
                                                        self.trace_free_curvature_correction,
@@ -884,10 +898,13 @@ class HarmonicBundle:
         report = {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_h": jnp.mean(w * jnp.linalg.det(h)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'Tr_Lambda_F_sq': jnp.mean(w * Tr_Lambda_F_sq) / vol_Omega,
-                'YM energy': jnp.mean(w * ym_energy) / vol_Omega, 'codiff_mean': codiff_mean,
-                'H_untwist': jnp.mean(jnp.expand_dims(w,(1,2)) * H_ut, axis=0) / vol_Omega, 'upper_bound_var': upper_bound_var}
+                'Λ F_0 energy': jnp.mean(w * energy) / vol_Omega, 'codiff_mean': codiff_mean,
+                'H': jnp.mean(jnp.expand_dims(w,(1,2)) * H, axis=0) / vol_Omega,
+                'H_untwist': jnp.mean(jnp.expand_dims(w,(1,2)) * H_ut, axis=0) / vol_Omega, 'upper_bound_var': upper_bound_var, 
+                'var_H_ut': var_H_ut, 'var_H': var_H}
 
         if conf_params is not None:
+            f = vmap(self.conformal_rescale_network, in_axes=(0,None))(p, conf_params)
             conf_loss = self.objective_function_conformal(data, conf_params, params)
             codiff_TrF_conf = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None))(p, pbs, conf_params)
             abs_codiff_conf = jnp.mean(jnp.abs(codiff_TrF_conf), axis=-1)        
@@ -895,7 +912,7 @@ class HarmonicBundle:
             TrF = vmap(self.conformal_change, in_axes=(0,None))(p, conf_params)
             Lambda_TrF = jnp.einsum("...vu, ...uv->... ", g_inv, TrF)
             report.update({'conformal_loss': conf_loss, "Λ Tr F": jnp.mean(w * Lambda_TrF) / vol_Omega,
-                           'codiff_conf': codiff_mean_conf})
+                           'codiff_conf': codiff_mean_conf, "f_avg": jnp.mean(w * f) / vol_Omega})
 
         return report
 
@@ -987,6 +1004,7 @@ class HarmonicBundle:
         key = jax.random.key(42)
         key, _k = jax.random.split(key)
 
+        # _tx = optax.adamw(learning_rate=lr)
         grad_threshold = 1.
         _tx = optax.chain(
           optax.clip(grad_threshold),
@@ -1186,6 +1204,7 @@ class HarmonicBundle:
                                              low_rank_approx=self.lr_approx)
         tx_endo = optax.chain(optax.clip(1.0), optax.adamw(learning_rate=lr_endo))
         endo_params, endo_opt_state, _ = create_train_state(k_endo, coeff_model, tx_endo, data_dim=self.n_homo_coords * 2)
+        # endo_params, endo_opt_state, _ = self._create_train_state(k_endo, coeff_model, tx_endo)
 
         # optional restore
         if ckpt_conf is not None:
@@ -1198,10 +1217,13 @@ class HarmonicBundle:
         logger.info(conf_model.tabulate(k_conf, jnp.ones([1, self.n_homo_coords * 2])))
         logger.info("Endomorphism model params: %d", sum(x.size for x in jax.tree_util.tree_leaves(endo_params)))
         logger.info(coeff_model.tabulate(k_endo, jnp.ones([1, self.n_homo_coords * 2])))
+        # logger.info(coeff_model.tabulate(k_endo))
 
         # training
         t0 = time.time()
+        iter_loader = iter(train_loader)
         with jax.default_device(device):
+
             for epoch in range(epochs):
 
                 # validation
@@ -1217,6 +1239,7 @@ class HarmonicBundle:
                 # get fresh train loader after first epoch
                 if epoch > 0:
                     train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
+                    iter_loader = iter(train_loader)
 
                 # alternating blocks
                 pbar = tqdm(desc=f"Epoch {epoch} [alt]",
@@ -1233,43 +1256,52 @@ class HarmonicBundle:
                     return f"conf: {c} | endo: {e}"
 
 
-                for t, batch in enumerate(train_loader):
-                    p, w, _ = batch
-                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
-                    data = (p, pb, w)
+                # for t, batch in enumerate(train_loader):
+                t = 0
+                while True:
+                    try:
+                        # 1) K_conf conformal updates
+                        for _ in range(inner_conf):
+                            p, w, _ = next(iter_loader)
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            data = (p, pb, w)
+                            conf_params, conf_opt_state, loss_conf = hym._train_step(
+                                data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal,
+                                aux_params=endo_params
+                            )
+                            last_conf = loss_conf.item()
+                            pbar.set_postfix_str(_postfix(), refresh=False)
+                            pbar.update(1)
 
-                    # 1) K_conf conformal updates
-                    for _ in range(inner_conf):
-                        conf_params, conf_opt_state, loss_conf = hym._train_step(
-                            data, conf_params, conf_opt_state, tx_conf, self.objective_function_conformal,
-                            aux_params=endo_params
-                        )
-                        last_conf = loss_conf.item()
-                        pbar.set_postfix_str(_postfix(), refresh=False)
+                        # 2) K_endo endomorphism updates
+                        for _ in range(inner_endo):
+                            p, w, _ = next(iter_loader)
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            data = (p, pb, w)
+                            endo_params, endo_opt_state, loss_endo = hym._train_step(
+                                data, endo_params, endo_opt_state, tx_endo, self.objective_function,
+                                aux_params=conf_params
+                            )
+                            last_endo = loss_endo.item()
+                            pbar.set_postfix_str(_postfix(), refresh=False)
+                            pbar.update(1)
 
+                        t += 1
+                        if t % self.eval_interval_t == 0:
+                            storage["train_loss_conf"].append(loss_conf.item())
+                            storage["train_loss_endo"].append(loss_endo.item())
 
-                    # 2) K_endo endomorphism updates
-                    for _ in range(inner_endo):
-                        endo_params, endo_opt_state, loss_endo = hym._train_step(
-                            data, endo_params, endo_opt_state, tx_endo, self.objective_function,
-                            aux_params=conf_params
-                        )
-                        last_endo = loss_endo.item()
-                        pbar.set_postfix_str(_postfix(), refresh=False)
+                            val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                            p, w, _ = val_data
+                            pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                            val_data = (p, pb, w)
 
-                    if t % self.eval_interval_t == 0:
-                        storage["train_loss_conf"].append(loss_conf.item())
-                        storage["train_loss_endo"].append(loss_endo.item())
+                            storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
+                                                    conf_params=conf_params)
+                    except StopIteration:
+                        break
 
-                        val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
-                        p, w, _ = val_data
-                        pb = vmap(self.pb_fn)(math_utils.to_complex(p))
-                        val_data = (p, pb, w)
-
-                        storage = self.callback(val_data, endo_params, storage, logger, epoch, t0, self._slope,
-                                                conf_params=conf_params)
-
-                    pbar.update(1)
+                    # pbar.update(1)
                 pbar.close()
 
                 if epoch % self.save_interval == 0:
@@ -1359,7 +1391,8 @@ class GenDonaldson(HarmonicBundle):
     
 
     def fibre_metric_from_H(self, p, H, aux=False):
-        S = self.twisted_section_basis(p)
+        # S = self.twisted_section_basis(p)
+        S = self.twisted_section_basis_in_frame(p, None, self.default_idx)
         S_c = jnp.conjugate(S)
         G_inv = jnp.einsum("mn, ...am, ...bn->...ab", H, S, S_c)
         G = jnp.einsum("...ba->...ab", jnp.linalg.inv(G_inv))  # G_{a \overline{b}}
@@ -1381,8 +1414,8 @@ class GenDonaldson(HarmonicBundle):
     @partial(jax.jit, static_argnums=(0,))
     def _G_update(self, p, H, w):
         p = math_utils.to_real(p)
-        # G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None))(p, H, True)
-        G, S, S_c = vmap(self.fibre_metric_from_H_basis_change, in_axes=(0,None,None))(p, H, True)
+        G, S, S_c = vmap(self.fibre_metric_from_H, in_axes=(0,None,None))(p, H, True)
+        # G, S, S_c = vmap(self.fibre_metric_from_H_basis_change, in_axes=(0,None,None))(p, H, True)
         integrand = jnp.einsum("...am, ...ab, ...bn->...mn", S, G, S_c)
         
         delta_T = jnp.mean(integrand * jnp.expand_dims(w, axis=(1,2)), axis=0)
@@ -1750,6 +1783,22 @@ class HarmonicForm(HarmonicBundle):
         t0 = time.time()
         with jax.default_device(device):
             for epoch in range(epochs):
+
+                if epoch % self.eval_interval == 0: 
+                    val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                    p, w, _ = val_data
+                    pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                    val_data = (p, pb, w)
+                    storage = self.callback(
+                        val_data, _params, storage, logger, epoch, t0, self._slope)
+
+                if epoch > 0: 
+                    train_loader = dataloading.data_loader(A_train, batch_size, shuffle_rng)
+
+                wrapped_train_loader = tqdm(train_loader, desc=f'Epoch {epoch}', total=dataset_size//batch_size, 
+                                            colour='green', mininterval=0.1)
+
+                for t, data in enumerate(wrapped_train_loader):
                     p, w, _ = data
                     pb = vmap(self.pb_fn)(math_utils.to_complex(p))
                     data = (p, pb, w)
@@ -1766,3 +1815,4 @@ class HarmonicForm(HarmonicBundle):
         utils.basic_ckpt(_params, _opt_state, self.name, 'FIN')
         utils.save_logs(storage, self.name, 'FIN')
         return _params, storage
+
