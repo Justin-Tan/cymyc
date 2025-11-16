@@ -116,8 +116,9 @@ class HarmonicBundle:
         # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
 
         monad_map_degree = int(self.monad_map_power_matrix.max())
-        n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
-        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - n_quotient
+        # quotient out by polynomials in the subspace bundle
+        self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
+        self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
@@ -628,9 +629,8 @@ class HarmonicBundle:
         n_coords = Ok_powers.shape[1]
         target = jnp.zeros((n_coords,), Ok_powers.dtype).at[coord_j].set(1)
         mask = jnp.all((Ok_powers - target) >= 0, axis=1)
-        n_quotient = math.comb(self.ambient_dim + (k_twist-1), (k_twist-1))
         # return jnp.where(mask, fill_value=0)[0]
-        return jnp.where(mask, size=n_quotient, fill_value=0)[0]
+        return jnp.where(mask, size=self.n_quotient, fill_value=0)[0]
 
     def twisted_section_basis(self, p, frame_idx=None, ambient=False):
 
