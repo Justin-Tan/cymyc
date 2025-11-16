@@ -49,9 +49,9 @@ class HarmonicBundle:
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 2
-        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1)    # (1,1,1,1)
-        self.line_bundle_A_twist = 1
+        self.line_bundle_A_twist = 0
         self.default_idx = 0
 
 
@@ -112,10 +112,11 @@ class HarmonicBundle:
 
         # CHANGE THIS
         self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        #self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
 
-        n_quotient = math.comb(self.ambient_dim + self.twisting_degree - 1, self.twisting_degree - 1)
+        monad_map_degree = int(self.monad_map_power_matrix.max())
+        n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - n_quotient
         self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
 
