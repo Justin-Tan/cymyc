@@ -48,10 +48,10 @@ class HarmonicBundle:
         # specify monad data
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
-        self.rank_V = 2
+        self.rank_V = 3
         self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
-        self.line_bundle_B = (1,1,1)    # (1,1,1,1)
-        self.line_bundle_A_twist = 0
+        self.line_bundle_B = (1,1,1,1)    # (1,1,1,1)
+        self.line_bundle_A_twist = 1
         self.default_idx = 0
 
 
@@ -111,8 +111,8 @@ class HarmonicBundle:
         self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
 
         # CHANGE THIS
-        self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        #self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
         # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
 
         monad_map_degree = int(self.monad_map_power_matrix.max())
