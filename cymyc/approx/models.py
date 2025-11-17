@@ -232,13 +232,16 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         super().setup()  # builds self.layers and self.dims
         self.n_out_cholesky = self.matrix_dim * self.matrix_dim
         # one head per frame of holomorphic vector bundle
-        self.heads = [nn.Dense(self.n_out_cholesky, name=f'frame_head_{i}')
-                      for i in range(self.n_frames)]
+        # self.heads = [nn.Dense(self.n_out_cholesky, name=f'frame_head_{i}')
+        #               for i in range(self.n_frames)]
         if self.low_rank_approx > 0:
-            self.diag_heads = [nn.Dense(self.matrix_dim, name=f'diag_head_{i}')
-                                for i in range(self.n_frames)]
-            self.low_rank_heads = [nn.Dense(self.matrix_dim * self.low_rank_approx * 2,
-                                    name=f'lr_head_{i}') for i in range(self.n_frames)]
+            self.diag_head = nn.Dense(self.matrix_dim, name=f'diag_head')
+            self.low_rank_head = nn.Dense(self.matrix_dim * self.low_rank_approx * 2, 
+                                          name=f'lr_head')
+            # self.diag_heads = [nn.Dense(self.matrix_dim, name=f'diag_head_{i}')
+            #                     for i in range(self.n_frames)]
+            # self.low_rank_heads = [nn.Dense(self.matrix_dim * self.low_rank_approx * 2,
+            #                         name=f'lr_head_{i}') for i in range(self.n_frames)]
 
     def postprocess(self, out):
 
@@ -261,10 +264,10 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         H = L @ jnp.conjugate(L).T
         return (H + jnp.conjugate(H).T) / 2.
 
-    def lr_approx(self, x, i):
-        D = self.diag_heads[i](x)
+    def lr_approx(self, x):
+        D = self.diag_head(x)
         D = nn.softplus(D)
-        M = self.low_rank_heads[i](x)
+        M = self.low_rank_head(x)
         M = M.reshape((self.matrix_dim * 2, self.low_rank_approx))
         M_r, M_i = M.reshape(2, self.matrix_dim, self.low_rank_approx)
         M = jax.lax.complex(M_r, M_i).astype(self.cdtype)
@@ -324,8 +327,8 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
                 _ = branch(self, x)
 
         out = nn.switch(frame_idx, branches, self, x)
-        if self.low_rank_approx > 0: return out
         """
+        if self.low_rank_approx > 0: return self.lr_approx(x)
         return self.postprocess(jnp.squeeze(out))
     
     @nn.compact

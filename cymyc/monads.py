@@ -49,7 +49,7 @@ class HarmonicBundle:
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 2  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 4  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)    # (1,1,1,1)
         self.line_bundle_A_twist = 1
         self.default_idx = 0
@@ -112,14 +112,14 @@ class HarmonicBundle:
 
         # CHANGE THIS
         # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_AG
+        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
+        self.monad_map_power_matrix = self.monad_map_power_matrix_AG
 
         monad_map_degree = int(self.monad_map_power_matrix.max())
         # quotient out by polynomials in the subspace bundle
         self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
-        self.lr_approx = min(0, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = 32 # min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -779,10 +779,11 @@ class HarmonicBundle:
 
     @staticmethod
     def low_rank_reconstruct(M, D, S, S_dual):
-        U = S @ M
-        V = jnp.conj(M).T @ S_dual.T
+        U = S_dual @ M
+        V = jnp.conj(M).T @ S.T
         h_lr = U @ V
-        h_diag = jnp.einsum("...am, ...m, ...bm->...ab", S, D, S_dual)
+        # h_diag = jnp.einsum("...am, ...m, ...bm->...ab", S, D, S_dual)
+        h_diag = jnp.einsum("...am, ...m, ...bm->...ab", S_dual, D, S)
         h = h_lr + h_diag
         return h
 
