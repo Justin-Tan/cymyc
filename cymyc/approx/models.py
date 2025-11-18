@@ -306,7 +306,6 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
 
-        out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
        
         """
         # frame-dependent branching
@@ -329,6 +328,7 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
         out = nn.switch(frame_idx, branches, self, x)
         """
         if self.low_rank_approx > 0: return self.lr_approx(x)
+        out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
         return self.postprocess(jnp.squeeze(out))
     
     @nn.compact

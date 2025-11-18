@@ -119,7 +119,7 @@ class HarmonicBundle:
         # quotient out by polynomials in the subspace bundle
         self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
-        self.lr_approx = 32 # min(0, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = 24 # min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -1200,7 +1200,7 @@ class HarmonicBundle:
         conf_params, conf_opt_state, _ = create_train_state(k_conf, conf_model, tx_conf, data_dim=self.n_homo_coords * 2)
 
         # endomorphism (coeff) network
-        self.n_units_harmonic = [48, 48, 48]
+        self.n_units_harmonic = [48, 48, 32]
         coeff_model = models.CholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
                                              matrix_dim=self._N_sb, n_frames=self.n_frames,
                                              low_rank_approx=self.lr_approx)
