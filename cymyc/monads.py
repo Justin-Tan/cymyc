@@ -119,7 +119,7 @@ class HarmonicBundle:
         # quotient out by polynomials in the subspace bundle
         self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
-        self.lr_approx = 24 # min(0, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = 32 # min(0, self._N_sb)  # set to zero for full dense matrix
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -542,6 +542,7 @@ class HarmonicBundle:
     @partial(jax.jit, static_argnums=(0,))
     def objective_function_conformal(self, data, params, endo_params=None, 
                                      MAX_NORM=20.):
+        """
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_TrF_conformal, in_axes=(0,0,None,None))(p, pb, 
@@ -555,8 +556,10 @@ class HarmonicBundle:
         abs_codiff = jnp.where(abs_codiff < MAX_NORM, abs_codiff, 0.)
         
         loss = jnp.mean(abs_codiff * w) / vol_Omega
-        #loss = hym.objective_function_implicit_slope(data, params,
-        #        self.conformal_change, self._metric_fn)
+        """
+        det_V_curvature_fn = jax.tree_util.Partial(self.conformal_change, endo_params=endo_params)
+        loss = hym.objective_function_implicit_slope(data, params,
+                det_V_curvature_fn, self._metric_fn)
         return loss
 
     def _contract_TrF(self, p, params):
@@ -1539,13 +1542,14 @@ class GenDonaldson(HarmonicBundle):
 class HarmonicForm(HarmonicBundle):
 
     def __init__(self, metric_fn, H_metric_fn, monomials, coefficients, cy_dim, ambient, 
-                 defining_polys=None):
+                 fixed_params, defining_polys=None):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         self.H_metric_fn = H_metric_fn  # HYM metric on V
       # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
-        self.family_ids = [2,6,8,22,40,42,45,49]
-        # self.n_harmonic = len(self.family_ids)
-        self.n_harmonic = 1
+        self.family_ids = [2,6,8]  # ,22,40,42,45,49]
+        self.n_harmonic = len(self.family_ids)
+        self.conf_params = fixed_params['conf']
+        self.endo_params = fixed_params['endo']
 
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         monomials_B = mbl.power_matrix
@@ -1556,7 +1560,6 @@ class HarmonicForm(HarmonicBundle):
                                                                                    monomials_B, monomials_C)
         self.n_Vk = self.rank_B * poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)
         self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)
-        self.N_sb = self.n_Vk - 1
 
     def preimage_monomials(self, q_basis_element):
         return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
@@ -1620,6 +1623,24 @@ class HarmonicForm(HarmonicBundle):
 
         return int_kappa_abc
 
+    @partial(jax.jit, static_argnums=(0,))
+    def yukawa_couplings_normalised(self, data, params):
+        
+        eps = 1e-6
+        kappa = self.yukawa_couplings(p)
+        p, weights, dVol_Omega = data
+
+        eta = vmap(self.harmonic_rep, in_axes=(0,None))(p, params)
+        g = vmap(self._metric_fn)(p)
+        H = vmap(self.H_metric_fn)(p)
+        G_matter = self.inner_product_Hodge(data, eta, g, H)
+        lambdas, U = jnp.linalg.eigh(G_matter)
+        A = U / jnp.sqrt(lambdas + eps)
+        kappa_normalised = jnp.einsum('...ax, ...by, ...cz, ...abc -> ...xyz',
+                                      A, A, A, kappa)
+        return kappa_normalised
+
+
     def yukawa_couplings_batched(self, p, batch_size=16384, kappa_dtype=np.float32):
         n = 0
         kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
@@ -1633,8 +1654,13 @@ class HarmonicForm(HarmonicBundle):
         return kappa
     
     def section_combination(self, p, params):
+        """
+        Get twisted basis of sections, untwist, and combine using coefficients output by a 
+        neural network.
+        """
         cubic_monomials = poly_utils.monomial_evaluate_log(p, self.mb3)
-        S = self.twisted_section_basis(p)
+        S = self.twisted_section_basis_in_frame(p, frame_idx=None, drop_patch_idx=self.default_idx)
+
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
         uts = jnp.einsum("...n, ...am->...amn", cubic_monomials, S) / jnp.expand_dims(z_norm**3, (0,1,2))
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
@@ -1657,15 +1683,15 @@ class HarmonicForm(HarmonicBundle):
         del_z_eta = curvature.del_bar_z(p, self.harmonic_rep, False, params)
         del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, jnp.conj(pb))
 
-        A = self.connection_form_V(p, self.H_metric_fn)
-        A_eta_contract = jnp.einsum("...aci, ...hcj->...haji", A, eta)
+        A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
+        A_eta_contract = jnp.einsum("...cau, ...hcv->...havu", A, eta)
         covariant_derivative_eta = del_z_eta + A_eta_contract
         codiff_eta = jnp.einsum("...vu, ...havu->...ha", g_inv, covariant_derivative_eta)
         return codiff_eta
     
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params, norm_control=False,
-                           full_contraction=False, MAX_NORM=10.):
+                           full_contraction=True, MAX_NORM=10.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
@@ -1677,7 +1703,7 @@ class HarmonicForm(HarmonicBundle):
 
         if full_contraction is True:
             H = vmap(self.H_metric_fn)(p)
-            integrand = jnp.einsum("...ab, ...ha, ...hb->...", H, codiff, jnp.conj(codiff))
+            integrand = jnp.einsum("...ab, ...ha, ...hb->...h", H, codiff, jnp.conj(codiff))
             integrand = jnp.squeeze(integrand)
             return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
         
@@ -1707,18 +1733,21 @@ class HarmonicForm(HarmonicBundle):
         eta = vmap(self.harmonic_rep, in_axes=(0,None))(p, params)
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
         codiff = jnp.squeeze(codiff)
-        codiff_integrand = jnp.einsum("...ab, ...ha, ...hb->...", H, codiff, jnp.conj(codiff))
-        codiff_integrand = jnp.squeeze(codiff_integrand)
+        codiff_integrand = jnp.einsum("...ab, ...ha, ...hb->...h", H, codiff, jnp.conj(codiff))
+        codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1))
 
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
         F = vmap(self.curvature_form_V, in_axes=(0,None))(p, self.H_metric_fn)
         H = vmap(self.H_metric_fn)(p)
         G_matter = self.inner_product_Hodge(data, eta, g, H)
+        G_matter_eigvals = jnp.linalg.eigvalsh(G_matter)
 
-        F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
-        F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
-        ym_energy_integrand = F_sq / 2.
+        F0 = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
+                pb, self.endo_params, self.conf_params)
+        Lambda_F0 = jnp.einsum("...vu, ...abuv->...ab", g_inv, F0)
+        Lambda_F0_norm = jnp.einsum("...ca, ...ab, ...cd, ...bd->...", jnp.linalg.inv(H), Lambda_F0, jnp.conj(Lambda_F0), H)
+        energy = jnp.abs(Lambda_F0_norm) / 2.
 
         g_tr_F = jnp.einsum("...vu, ...abuv->...ab", g_inv, F)
         det_g_tr_F = jnp.linalg.det(g_tr_F)
@@ -1728,11 +1757,25 @@ class HarmonicForm(HarmonicBundle):
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
                 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'codiff_norm': jnp.mean(w * jnp.abs(codiff_integrand)) / vol_Omega,
-                'YM energy': jnp.mean(w * ym_energy_integrand) / vol_Omega, 'G_Kahler': jnp.diag(G_matter)}
+                'Λ_F_0_energy': jnp.mean(w * energy) / vol_Omega, 'G_Kahler': jnp.diag(G_matter),
+                'G_matter_eigvals': G_matter_eigvals}
     
-    def fit(self, data_path, epochs: int = 128, batch_size: int = 512, lr: float = 1e-4,
-            shuffle_rng = np.random.default_rng(), name = None,
-            ckpt: dict = None):
+    def callback(self, val_data, params, storage, logger, epoch, t0):
+        loss_breakdown_dict = self.loss_breakdown(val_data, params)
+        loss_breakdown_dict = jax.device_get(loss_breakdown_dict)
+        summary = jax.tree_util.tree_map(utils.log_arrays, loss_breakdown_dict)
+
+        mode = 'VAL'
+        logs = [utils.round_str(k, v) for (k, v) in summary.items()]
+        logger.info(f"[{time.time()-t0:.1f}s]: [{mode}] | Epoch: {epoch}" + ''.join([f" | {log}" for log in logs]))
+
+        [storage[k].append(v) for (k,v) in summary.items()]
+        if epoch % self.save_interval == 0:
+            utils.save_logs(storage, self.name, epoch)
+        return storage
+
+    def fit_harmonic(self, data_path, epochs: int = 128, batch_size: int = 512, lr: float = 1e-4,
+            shuffle_rng = np.random.default_rng(), name = None, ckpt: dict = None):
 
         self.name = f"harmonic_HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
         self.eval_interval = 1  # epochs
@@ -1810,7 +1853,13 @@ class HarmonicForm(HarmonicBundle):
 
                     if t % self.eval_interval_t == 0:
                         storage["train_loss"].append(loss.item())
-
+                        val_loader, val_data = dataloading.get_validation_data(val_loader, batch_size, A_val, shuffle_rng)
+                        p, w, _ = val_data
+                        pb = vmap(self.pb_fn)(math_utils.to_complex(p))
+                        val_data = (p, pb, w)
+                        storage = self.callback(
+                            val_data, _params, storage, logger, epoch, t0, self._slope)
+                        
                 if epoch % self.save_interval == 0:
                     utils.basic_ckpt(_params, _opt_state, self.name, f'{epoch}')
 
