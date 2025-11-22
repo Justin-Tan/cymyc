@@ -1203,7 +1203,7 @@ class HarmonicBundle:
         conf_params, conf_opt_state, _ = create_train_state(k_conf, conf_model, tx_conf, data_dim=self.n_homo_coords * 2)
 
         # endomorphism (coeff) network
-        self.n_units_harmonic = [48, 48, 32]
+        self.n_units_harmonic = [48, 48, 48]
         coeff_model = models.CholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
                                              matrix_dim=self._N_sb, n_frames=self.n_frames,
                                              low_rank_approx=self.lr_approx)
@@ -1558,8 +1558,8 @@ class HarmonicForm(HarmonicBundle):
         _monad_map_AG = [v**3 for v in variables[:4]]
         self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, _monad_map_AG, 
                                                                                    monomials_B, monomials_C)
-        self.n_Vk = self.rank_B * poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)
-        self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)
+        self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree) - self.n_quotient
+        self.n_Vk = self.rank_B * self.n_Ok
 
     def preimage_monomials(self, q_basis_element):
         return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
@@ -1568,7 +1568,7 @@ class HarmonicForm(HarmonicBundle):
         p_c = math_utils.to_complex(p)[:len(self.monad_map_power_matrix)]
         exp_arg = jnp.real(p_c * jnp.conjugate(p_c))
         p_abs_sq = jnp.sum(exp_arg)
-        w = jnp.exp(-exp_arg / p_abs_sq)
+        w = jnp.exp(-exp_arg / p_abs_sq)    
         return w / jnp.sum(w)
     
     def monad_map_preimage(self, p):
@@ -1653,16 +1653,23 @@ class HarmonicForm(HarmonicBundle):
             n += B
         return kappa
     
-    def section_combination(self, p, params):
+    def section_combination(self, p, params, drop_patch_idx=None):
         """
         Get twisted basis of sections, untwist, and combine using coefficients output by a 
         neural network.
         """
-        cubic_monomials = poly_utils.monomial_evaluate_log(p, self.mb3)
+        if drop_patch_idx is None: drop_patch_idx = self.default_idx
+        Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
+        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
+        Ok_powers_quotient = jnp.delete(Ok_powers, trivial_idx, axis=0, assume_unique_indices=True)
+        Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers_quotient)
+
+        # Ok_monomials = poly_utils.monomial_evaluate_log(p, self.mb3)
         S = self.twisted_section_basis_in_frame(p, frame_idx=None, drop_patch_idx=self.default_idx)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
-        uts = jnp.einsum("...n, ...am->...amn", cubic_monomials, S) / jnp.expand_dims(z_norm**3, (0,1,2))
+        uts = jnp.einsum("...n, ...am->...amn", Ok_monomials, S) / jnp.expand_dims(z_norm**self.twisting_degree, 
+                                                                                   (0,1,2))
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
                                       self.N_sb, self.n_Ok)
         s = jnp.squeeze(jnp.einsum("...mn, ...amn->...a", psi[0], uts))
