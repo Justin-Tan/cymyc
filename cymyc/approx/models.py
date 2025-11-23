@@ -357,6 +357,60 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
                            # activation=activation).apply(variables)
 
 
+class FactorisedCholeskyNetwork(LearnedVector_spectral_nn_CICY):
+    r"""
+    Outputs a Hermitian matrix parameterised as a sum of Kronecker products
+    $ H = \sum_{r} (L_f^{(r)} L_f^{(r)\dagger}) \otimes (L_b^{(r)} L_b^{(r)\dagger}) $
+    """
+    n_fiber: int = 1
+    n_base: int = 1
+    td_rank: int = 4
+    cdtype: jnp.dtype = jnp.complex64
+
+    def setup(self):
+        super().setup()
+        self.n_out_fiber = self.n_fiber * self.n_fiber
+        self.n_out_base = self.n_base * self.n_base
+        
+        self.fiber_head = nn.Dense(self.n_out_fiber * self.td_rank * 2, name='fiber_head')
+        self.base_head = nn.Dense(self.n_out_base * self.td_rank * 2, name='base_head')
+
+    def _process_factor(self, x, dim):
+        x_r, x_i = x.reshape(2, dim, dim)
+        A = jax.lax.complex(x_r, x_i).astype(self.cdtype)
+        return A @ jnp.conjugate(A).T
+
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"]):
+        if self.use_spectral_embedding is True:
+            x = math_utils.to_complex(jnp.squeeze(x))
+            spectral_out = []
+            for i in range(len(self.ambient)):
+                s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+                p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+                p_ambient_i = math_utils.to_real(p_ambient_i)
+                spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
+
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i != self.n_hidden - 1:
+                x = self.activation(x)
+
+        out_f = self.fiber_head(x).reshape(self.td_rank, -1)
+        out_b = self.base_head(x).reshape(self.td_rank, -1)
+
+        Hs_fiber = vmap(self._process_factor, in_axes=(0, None))(out_f, self.n_fiber)
+        Hs_base  = vmap(self._process_factor, in_axes=(0, None))(out_b, self.n_base)
+
+        return Hs_fiber, Hs_base
+
+@partial(jit, static_argnums=(2,3,4,5,6))
+def factorised_cholesky_head(p, params, n_homo_coords, ambient, n_fiber, n_base, td_rank=4):
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if ('kernel' in params[k] and 'layer' in k)]
+    return FactorisedCholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units,
+                                     n_fiber=n_fiber, n_base=n_base, td_rank=td_rank).apply({'params': params}, p)
+
 class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
     r"""
     Spectral network parameterising the coefficients of a linear combination of a basis
