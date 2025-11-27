@@ -1584,6 +1584,8 @@ class HarmonicForm(HarmonicBundle):
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
+        self.use_low_rank_approx = True
+        self.low_rank_dim = 16
 
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         monomials_B = mbl.power_matrix
@@ -1687,6 +1689,14 @@ class HarmonicForm(HarmonicBundle):
             n += B
         return kappa
     
+    @staticmethod
+    def low_rank_reconstruct(M_1, M_2, S, Ok_monomials):
+        S_compressed = jnp.einsum("...am, ...hlm->...al", S, M_1)
+        Ok_compressed = jnp.einsum("...n, ...hln->...hl", Ok_monomials, M_2)
+        s = jnp.einsum("...hl, ...al->...ha", Ok_compressed, S_compressed)
+        return s
+
+    
     def section_combination(self, p, params, frame_idx=None, drop_patch_idx=None):
         """
         Get twisted basis of sections, untwist, and combine using coefficients output by a 
@@ -1706,12 +1716,22 @@ class HarmonicForm(HarmonicBundle):
         S = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
-        uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree, (0,1,2))
+
+        # get coefficients from NN
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      n_1=self.n_Vk, n_2=self.n_Ok, n_harmonic=self.n_harmonic)
-        print('psi shape', psi[0].shape)
-        print('uts shape', uts.shape)
-        s = jnp.squeeze(jnp.einsum("...hmn, ...amn->...ha", psi[0], uts))
+                                      n_1=self.n_Vk, n_2=self.n_Ok, n_harmonic=self.n_harmonic,
+                                      use_low_rank_approx=self.use_low_rank_approx, low_rank_dim=self.low_rank_dim)
+
+        if self.use_low_rank_approx is True:
+            uts = jnp.conjugate(Ok_monomials) / jnp.expand_dims(z_norm**self.twisting_degree, (0,))
+            M_1, M_2 = psi
+            s = self.low_rank_reconstruct(M_1, M_2, S, uts)
+        else:
+            print('psi shape', psi.shape)
+            print('uts shape', uts.shape)
+            uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree, (0,1,2))
+            s = jnp.squeeze(jnp.einsum("...hmn, ...amn->...ha", psi, uts))
+
         return s
 
     def harmonic_rep(self, p, params):

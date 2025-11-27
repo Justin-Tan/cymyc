@@ -512,23 +512,40 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
 
     n_harmonic: int = 1
     use_spectral_embedding: bool = True
-    complex_kernel: bool = True
+    complex_kernel: bool = False
+    use_low_rank_approx: bool = True
+    low_rank_dim: int = 16
 
     def setup(self):
+        if self.n_1 < self.n_2:
+            tmp = self.n_1
+            self.n_1 = self.n_2
+            self.n_2 = tmp
         self.n_hidden = len(self.n_units)
         self.dims = np.array(self.ambient) + 1  # coords for each ambient space factor
 
         self.layers = [nn.Dense(f) for f in self.n_units]
 
         self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
-        if self.common_ambient_space:
+        if not self.common_ambient_space: raise NotImplementedError
+        if self.use_low_rank_approx is True:
+            self.low_rank_head_n_1 = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                self.low_rank_dim, self.n_1), "...i, ...ihlm->...hlm", 
+                                                name='lr_coeffs_n1', complex_kernel=self.complex_kernel)
+            self.low_rank_head_n_2 = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                self.low_rank_dim, self.n_2), "...i, ...ihlm->...hlm", 
+                                                name='lr_coeffs_n2', complex_kernel=self.complex_kernel)
+        else:
             # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
             self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
-                                                  self.n_1, self.n_2), "...i, ...ihab->...hab", 
-                                                  name='layers_coeffs', complex_kernel=self.complex_kernel)
-        else:
-            raise NotImplementedError
+                                                self.n_1, self.n_2), "...i, ...ihab->...hab", 
+                                                name='layers_coeffs', complex_kernel=self.complex_kernel)
         
+    def lr_approx(self, x):
+        M_1 = self.low_rank_head_n_1(x)
+        M_2 = self.low_rank_head_n_2(x)
+        return M_1, M_2
+    
     @nn.compact
     def __call__(self, x: Float[Array, "i"], aux: Float[Array, "j"] = None) -> Array:
         """Forward pass for coefficients, modelled as vector-valued functions on $X$. 
@@ -567,10 +584,17 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
             if i != self.n_hidden - 1:
                 _x = self.activation(_x)
 
+        if self.use_low_rank_approx is True:
+            M_1, M_2 = self.lr_approx(_x)
+            print(f'{self.__call__.__qualname__}, low rank shapes, {M_1.shape}, {M_2.shape}')
+            return M_1, M_2
+
         if self.common_ambient_space:
             coeffs = self.coeff_layer(_x)  # [..., n_A * n_harmonic, n_1, n_2]
             print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
-            return jnp.split(coeffs, len(self.ambient), axis=0)
+            if len(self.ambient) > 1:
+                return jnp.split(coeffs, len(self.ambient), axis=0)
+            return coeffs
         else:
             coeffs = [coeff_layer(_x) for coeff_layer in self.coeff_layers]
             print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
@@ -687,8 +711,9 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
 
 @partial(jit, static_argnums=(2,3,4,5,7,8,9))
 def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
-                     ambient: Sequence[int], n_1: int, n_2: int, aux: Float[Array, "i"] = None, 
-                     n_harmonic: int = 1, complex_kernel=True,
+                     ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1, 
+                     use_low_rank_approx: bool = True, low_rank_dim: int = 16, 
+                     complex_kernel=False,
                      activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
     """
@@ -699,7 +724,8 @@ def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_c
 
     variables = {'params': params}
     return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
-            n_harmonic=n_harmonic, activation=activation, complex_kernel=complex_kernel).apply(variables, p)#, aux)
+            n_harmonic=n_harmonic, use_low_rank_approx=use_low_rank_approx, low_rank_dim=low_rank_dim,
+            activation=activation, complex_kernel=complex_kernel).apply(variables, p)
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
