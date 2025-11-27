@@ -49,9 +49,9 @@ class HarmonicBundle:
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 3  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 4  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)    # (1,1,1,1)
-        self.line_bundle_A_twist = 0
+        self.line_bundle_A_twist = 1
         self.default_idx = 0
 
 
@@ -121,7 +121,8 @@ class HarmonicBundle:
         # quotient out by polynomials in the subspace bundle
         self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
-        self.lr_approx = 0 # min(0, self._N_sb)  # set to zero for full dense matrix
+        self.lr_approx = 32 # min(0, self._N_sb)  # set to zero for full dense matrix
+        self.td_rank = 5
 
         self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
@@ -490,22 +491,6 @@ class HarmonicBundle:
         energy = jnp.abs(Lambda_F0_norm) / 2.
         return jnp.mean(w * energy) / jnp.mean(w)
 
-        #F_up = jnp.einsum("...ji, ...kl, ...abik->...abjl", g_inv, g_inv, F) #  F^{\bar{\nu} \mu}^a_b
-        #F_sq = jnp.einsum("...abij, ...cdij, ...db, ...ac->...", F, jnp.conjugate(F_up), jnp.linalg.inv(H), H)
-        # F_sq = jnp.einsum("...abij, ...cdkl, ...db, ...ac->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
-        F_sq = jnp.einsum("...abij, ...cdkl, ...ca, ...bd->...ijkl", F, jnp.conj(F), jnp.linalg.inv(H), H)
-        F_sq = jnp.einsum("...ijkl, ...ki, ...jl->...", F_sq, g_inv, g_inv)
-
-        ym_energy = jnp.abs(F_sq) / 2.
-
-        valid = jnp.logical_and(jnp.isfinite(ym_energy), ym_energy < MAX_YM_NORM)
-        valid_w = w * valid.astype(w.dtype)
-        #ym_energy = jnp.where(ym_energy < MAX_YM_NORM, ym_energy, 0.)
-        #return ym_energy
-        return jnp.mean(valid_w * ym_energy) / jnp.mean(valid_w)
-        return jnp.mean(w * ym_energy) / jnp.mean(w)
-        return loss
-
     def conformal_rescale_network(self, p, params):
         if (self.n_hyper > 1) or (len(self.ambient) > 1):
             model_class = models.LearnedVector_spectral_nn_CICY
@@ -789,7 +774,7 @@ class HarmonicBundle:
         h = h_lr + h_diag
         return h
 
-    def _endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
+    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
@@ -836,16 +821,15 @@ class HarmonicBundle:
         return h
     
 
-    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
+    def _endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
         $V$ tensored by a dual section.
         $$ h^b_a = \sum_{mn} H^{mn} S^b_m \otimes \hat{S}_{an}~. $$
         """
-        td_rank = 4
         ambient_coeffs, Ok_coeffs = models.factorised_cholesky_head(p, params, self.n_homo_coords, tuple(self.ambient),
-                                      self._N_sb, n_fibre=self.rank_B, n_base=self.n_Ok, td_rank=td_rank)
+                                      n_fiber=self.rank_B, n_base=self.n_Ok, td_rank=self.td_rank)
 
         # CHANGES
         if frame_idx is None:
@@ -863,9 +847,10 @@ class HarmonicBundle:
         tsb_dual = jnp.einsum("...ab, ...bmx->...amx", H_fs_V, jnp.conjugate(tsb))
 
         # m: ambient summand index, x: Ok index
-        Ok_contract = jnp.einsum("...amx, ...rxy, ...bny->...abrmn", tsb_dual, Ok_coeffs, tsb)
-        ambient_contract = jnp.einsum("...abrmn, ...rmn->...abr", Ok_contract, ambient_coeffs)
-        h = jnp.sum(ambient_contract, axis=-1)
+        #Ok_contract = jnp.einsum("...amx, ...rxy, ...bny->...abrmn", tsb_dual, Ok_coeffs, tsb)
+        #ambient_contract = jnp.einsum("...abrmn, ...rmn->...abr", Ok_contract, ambient_coeffs)
+        #h = jnp.sum(ambient_contract, axis=-1)
+        h = jnp.einsum("...amx, ...rxy, ...bny, ...rmn->...ab", tsb_dual, Ok_coeffs, tsb, ambient_coeffs)
 
         # full dense matrix
         # h = jnp.einsum("...am, ...mn, ...bn->...ab", tsb_dual, coeffs, tsb)
@@ -1250,10 +1235,12 @@ class HarmonicBundle:
         conf_params, conf_opt_state, _ = create_train_state(k_conf, conf_model, tx_conf, data_dim=self.n_homo_coords * 2)
 
         # endomorphism (coeff) network
-        self.n_units_harmonic = [48, 48, 48]
-        coeff_model = models.CholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
-                                             matrix_dim=self._N_sb, n_frames=self.n_frames,
-                                             low_rank_approx=self.lr_approx)
+        self.n_units_harmonic = [48, 48, 32]
+        #coeff_model = models.CholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
+        #                                     matrix_dim=self._N_sb, n_frames=self.n_frames,
+        #                                     low_rank_approx=self.lr_approx)
+        coeff_model = models.FactorisedCholeskyNetwork(self.n_homo_coords, self.ambient, self.n_units_harmonic,
+                                                       n_fiber=self.rank_B, n_base=self.n_Ok, td_rank=self.td_rank)
         tx_endo = optax.chain(optax.clip(1.0), optax.adamw(learning_rate=lr_endo))
         endo_params, endo_opt_state, _ = create_train_state(k_endo, coeff_model, tx_endo, data_dim=self.n_homo_coords * 2)
         # endo_params, endo_opt_state, _ = self._create_train_state(k_endo, coeff_model, tx_endo)
@@ -1593,7 +1580,7 @@ class HarmonicForm(HarmonicBundle):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         self.H_metric_fn = H_metric_fn  # HYM metric on V
       # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
-        self.family_ids = [2,6,8]  # ,22,40,42,45,49]
+        self.family_ids = [2,6,8,22] #,40,42,45,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
@@ -1605,8 +1592,8 @@ class HarmonicForm(HarmonicBundle):
         _monad_map_AG = [v**3 for v in variables[:4]]
         self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, _monad_map_AG, 
                                                                                    monomials_B, monomials_C)
-        self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree) - self.n_quotient
-        self.n_Vk = self.rank_B * self.n_Ok
+        self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)# - self.n_quotient
+        self.n_Vk = self.rank_B * self.n_Ok - self.n_quotient
 
     def preimage_monomials(self, q_basis_element):
         return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
@@ -1700,7 +1687,7 @@ class HarmonicForm(HarmonicBundle):
             n += B
         return kappa
     
-    def section_combination(self, p, params, drop_patch_idx=None):
+    def section_combination(self, p, params, frame_idx=None, drop_patch_idx=None):
         """
         Get twisted basis of sections, untwist, and combine using coefficients output by a 
         neural network.
@@ -1709,16 +1696,21 @@ class HarmonicForm(HarmonicBundle):
         Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
         trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
         Ok_powers_quotient = jnp.delete(Ok_powers, trivial_idx, axis=0, assume_unique_indices=True)
-        Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers_quotient)
+        # Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers_quotient)
+        Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
 
         # Ok_monomials = poly_utils.monomial_evaluate_log(p, self.mb3)
-        S = self.twisted_section_basis_in_frame(p, frame_idx=None, drop_patch_idx=self.default_idx)
+        if frame_idx is None:
+            p_c = math_utils.to_complex(p)
+            frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        S = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
-        uts = jnp.einsum("...n, ...am->...amn", Ok_monomials, S) / jnp.expand_dims(z_norm**self.twisting_degree, 
-                                                                                   (0,1,2))
+        uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree, (0,1,2))
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      self.N_sb, self.n_Ok)
+                                      n_1=self.n_Vk, n_2=self.n_Ok, n_harmonic=self.n_harmonic)
+        print(psi[0].shape)
+        print(uts.shape)
         s = jnp.squeeze(jnp.einsum("...mn, ...amn->...a", psi[0], uts))
         return s
 
