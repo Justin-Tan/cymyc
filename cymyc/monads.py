@@ -1709,9 +1709,9 @@ class HarmonicForm(HarmonicBundle):
         uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree, (0,1,2))
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
                                       n_1=self.n_Vk, n_2=self.n_Ok, n_harmonic=self.n_harmonic)
-        print(psi[0].shape)
-        print(uts.shape)
-        s = jnp.squeeze(jnp.einsum("...mn, ...amn->...a", psi[0], uts))
+        print('psi shape', psi[0].shape)
+        print('uts shape', uts.shape)
+        s = jnp.squeeze(jnp.einsum("...hmn, ...amn->...ha", psi[0], uts))
         return s
 
     def harmonic_rep(self, p, params):
