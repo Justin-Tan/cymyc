@@ -709,7 +709,7 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
             activation=activation).apply({'params': params}, p)
 
 
-@partial(jit, static_argnums=(2,3,4,5,7,8,9))
+@partial(jit, static_argnums=(2,3,4,5,6,7,8,9))
 def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
                      ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1, 
                      use_low_rank_approx: bool = True, low_rank_dim: int = 16, 
