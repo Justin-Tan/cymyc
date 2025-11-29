@@ -1582,7 +1582,8 @@ class HarmonicForm(HarmonicBundle):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         self.H_metric_fn = H_metric_fn  # HYM metric on V
       # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
-        self.family_ids = [2,6,8,22] #,40,42,45,49]
+        # self.family_ids = [2,6,8,22] #,40,42,45,49]
+        self.family_ids = [2,] #,40,42,45,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
@@ -1791,7 +1792,8 @@ class HarmonicForm(HarmonicBundle):
             #print('psi shape', psi.shape)
             #print('uts shape', uts.shape)
             uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree_harmonic, (0,1,2))
-            s = jnp.squeeze(jnp.einsum("...hmn, ...amn->...ha", psi, uts))
+            s = jnp.einsum("...hmn, ...amn->...ha", psi, uts)
+            if self.n_harmonic > 1: s = jnp.squeeze(s)
 
         s_norm = jnp.linalg.norm(s, keepdims=True)
         return s# / s_norm
@@ -1802,6 +1804,7 @@ class HarmonicForm(HarmonicBundle):
         xi = self.H1XV_representatives(p)  # [..., h^1_V, rank_V, cy_dim]
         #return xi
         correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params)
+        if self.n_harmonic == 1: correction_ambient = jnp.expand_dims(correction_ambient, 0)
         form_correction = jnp.einsum('...hai,...ji->...haj', correction_ambient, jnp.conj(pb))
         eta = xi + form_correction
         return eta
@@ -1809,8 +1812,9 @@ class HarmonicForm(HarmonicBundle):
     def codifferential_eta(self, p, pb, params):
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         eta = self.harmonic_rep(p, params)  # [..., h^1_V, rank_V, cy_dim]
-        del_z_eta = curvature.del_bar_z(p, self.harmonic_rep, False, params)
-        del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, jnp.conj(pb))
+        del_z_eta = curvature.del_z(p, self.harmonic_rep, False, params)
+        if self.n_harmonic == 1: del_z_eta = jnp.expand_dims(del_z_eta, 0)
+        del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, pb)
 
         A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
         A_eta_contract = jnp.einsum("...cau, ...hcv->...havu", A, eta)
@@ -1824,7 +1828,7 @@ class HarmonicForm(HarmonicBundle):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
-        codiff = jnp.squeeze(codiff)  # [..., i]
+        if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)  # [..., i]
         #return codiff
 
         if norm_control is True:
@@ -1837,7 +1841,7 @@ class HarmonicForm(HarmonicBundle):
         if full_contraction is True:
             H = vmap(self.H_metric_fn)(p)
             integrand = jnp.einsum("...ab, ...ha, ...hb->...", H, codiff, jnp.conj(codiff))
-            integrand = jnp.squeeze(integrand) / self.n_harmonic
+            integrand = jnp.squeeze(integrand) / self.n_harmonic / self.rank_V**2
             return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
         
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1) 
@@ -1876,9 +1880,9 @@ class HarmonicForm(HarmonicBundle):
         G_matter_eigvals = jnp.linalg.eigvalsh(G_matter)
 
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
-        codiff = jnp.squeeze(codiff)
+        if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)
         codiff_integrand = jnp.einsum("...ab, ...ha, ...hb->...h", H, codiff, jnp.conj(codiff))
-        codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1))
+        codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1)) / (self.rank_V**2)
 
         F0 = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
                 pb, self.endo_params, self.conf_params)
