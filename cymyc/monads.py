@@ -1586,18 +1586,29 @@ class HarmonicForm(HarmonicBundle):
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
-        self.use_low_rank_approx = True
-        self.low_rank_dim = 8
+        self.use_low_rank_approx = False
+        self.low_rank_dim = 16
+        self.line_bundle_C = 4
+        self.twisting_degree_harmonic = 3
+        self.line_bundle_A_twist_harmonic = 0
+
+        self.Ok_powers_harmonic = self.degree_to_monomial_basis[self.twisting_degree_harmonic]
+        self.monomial_basis = poly_utils.MonomialBasisReduced(ambient, self.twisting_degree_harmonic + self.line_bundle_B[0], defining_polys)
 
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         monomials_B = mbl.power_matrix
-        monomials_C = self.monomial_basis.power_matrix
+        monomial_basis_C = poly_utils.MonomialBasisReduced(self.ambient, self.line_bundle_C, defining_polys)
+        monomials_C = monomial_basis_C.power_matrix
         variables = sp.symarray('z', ambient.item() + len(ambient))
         _monad_map_AG = [v**3 for v in variables[:4]]
         self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, _monad_map_AG, 
                                                                                    monomials_B, monomials_C)
-        self.n_Ok = poly_utils.dim_OXk(self.ambient, self.twisting_degree, self.monomial_basis.mod_degree)# - self.n_quotient
-        self.n_Vk = self.rank_B * self.n_Ok - self.n_quotient
+        monad_map_degree = int(self.monad_map_power_matrix.max())
+        self.n_Ok_harmonic = poly_utils.dim_OXk(self.ambient, self.twisting_degree_harmonic, self.monomial_basis.mod_degree)
+        self.n_quotient_harmonic = math.comb(self.ambient_dim + self.twisting_degree_harmonic - monad_map_degree,
+                self.twisting_degree_harmonic - monad_map_degree)
+        self.n_Vk = self.rank_B * self.n_Ok_harmonic - self.n_quotient_harmonic
+
 
     def preimage_monomials(self, q_basis_element):
         return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
@@ -1620,8 +1631,15 @@ class HarmonicForm(HarmonicBundle):
         mono_eval = poly_utils.monomial_evaluate_log(p, _preimage_monomials)
         return jnp.expand_dims(_preimage_coeffs, axis=(0,)) * mono_eval
         
+    def _monad_map_preimage(self, p):
+        quotient_polys = poly_utils.monomial_evaluate_log(p, self.quotient_basis)
+        f_map = poly_utils.monomial_evaluate_log(p, self.monad_map_power_matrix)
+        f_norm_sq = jnp.sum(jnp.abs(f_map)**2)
+        return 1./ f_norm_sq * jnp.expand_dims(quotient_polys, 1) * jnp.conj(f_map)
+
+
     def del_bar_section_B(self, p):
-        del_bar_mu = curvature.del_bar_z(p, self.monad_map_preimage)
+        del_bar_mu = curvature.del_bar_z(p, self._monad_map_preimage)
         pb = self.pb_fn(math_utils.to_complex(p))
         return jnp.einsum("...hav, ...uv->...hau", del_bar_mu, jnp.conjugate(pb))
 
@@ -1630,11 +1648,12 @@ class HarmonicForm(HarmonicBundle):
         """
         Representatives of the $H^1(X;V)$ cohomology
         """
-        # patch_idx = 0
-        patch_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         nu = self.del_bar_section_B(p)
         # project onto subbundle
-        nu = jnp.delete(nu, patch_idx, axis=-2, assume_unique_indices=True)
+        emb = self.embedding_matrix_twisted(p, frame_idx) 
+        nu = jnp.einsum("...ax, ...hxj->...haj", emb, nu)
+        # nu = jnp.delete(nu, frame_idx, axis=-2, assume_unique_indices=True)
 
         # select families for testing
         return jnp.take(nu, np.asarray(self.family_ids), axis=0)
@@ -1698,6 +1717,45 @@ class HarmonicForm(HarmonicBundle):
         s = jnp.einsum("...hl, ...al->...ha", Ok_compressed, S_compressed)
         return s
 
+    def _trivial_mono_index_Pn_harmonic(self, Ok_powers, coord_j, k):
+        # Find idx of Z_j^k in the monomial power matrix
+        if self.line_bundle_A_twist_harmonic > 0:
+            return self._trivial_mono_index_mult_Pn(Ok_powers, coord_j, k)
+        target = jnp.zeros((Ok_powers.shape[1],), Ok_powers.dtype).at[coord_j].set(k)
+        mask = jnp.all(Ok_powers == target, axis=1)
+        # assumes target exists; fall back to 0 if not found
+        return jnp.where(mask, size=1, fill_value=0)[0][0]
+
+    def twisted_section_basis_in_frame_harmonic(self, p, frame_idx=None, drop_patch_idx=None,
+            ambient: bool = False, quotient: bool = True):
+        """
+        Sections of V ⊗ O(k) expressed in a fixed fiber frame 'frame_idx',
+        dropping exactly one column: the trivial monomial Z_{frame_idx}^k
+        from the block 'drop_patch_idx'. This lets you compare bases without
+        applying a row transition T.
+        """
+
+        p_c = math_utils.to_complex(p)
+        if frame_idx is None:
+            frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        if drop_patch_idx is None:
+            drop_patch_idx = frame_idx
+
+        Ok_monomials = poly_utils.monomial_evaluate_log(p, self.Ok_powers_harmonic)
+        blocks = [Ok_monomials] * self.rank_B
+        section_matrix = jax.scipy.linalg.block_diag(*blocks)  # frame-independent
+
+        # trivial monomial position relative to the chosen frame
+        trivial_idx = self._trivial_mono_index_Pn_harmonic(self.Ok_powers_harmonic, coord_j=drop_patch_idx,
+                k=self.twisting_degree_harmonic)
+        col_to_delete = drop_patch_idx * self.n_Ok_harmonic + trivial_idx
+        if quotient is True:
+            section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
+
+        if ambient is True:
+            return section_matrix
+        emb = self.embedding_matrix_twisted(p, frame_idx)  # rows in 'frame_idx'
+        return emb @ section_matrix
     
     def section_combination(self, p, params, frame_idx=None, drop_patch_idx=None):
         """
@@ -1705,8 +1763,8 @@ class HarmonicForm(HarmonicBundle):
         neural network.
         """
         if drop_patch_idx is None: drop_patch_idx = self.default_idx
-        Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
-        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree)
+        Ok_powers = self.degree_to_monomial_basis[self.twisting_degree_harmonic]
+        trivial_idx = self._trivial_mono_index_Pn(Ok_powers, coord_j=drop_patch_idx, k=self.twisting_degree_harmonic)
         Ok_powers_quotient = jnp.delete(Ok_powers, trivial_idx, axis=0, assume_unique_indices=True)
         # Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers_quotient)
         Ok_monomials = poly_utils.monomial_evaluate_log(p, Ok_powers)
@@ -1715,26 +1773,28 @@ class HarmonicForm(HarmonicBundle):
         if frame_idx is None:
             p_c = math_utils.to_complex(p)
             frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
-        S = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
+        S = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
 
         # get coefficients from NN
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
-                                      n_1=self.n_Vk, n_2=self.n_Ok, n_harmonic=self.n_harmonic,
+                                      n_1=self.n_Vk, n_2=self.n_Ok_harmonic, n_harmonic=self.n_harmonic,
                                       use_low_rank_approx=self.use_low_rank_approx, low_rank_dim=self.low_rank_dim)
 
         if self.use_low_rank_approx is True:
-            uts = jnp.conjugate(Ok_monomials) / jnp.expand_dims(z_norm**self.twisting_degree, (0,))
-            M_1, M_2 = psi
+            uts = jnp.conjugate(Ok_monomials) / jnp.expand_dims(z_norm**self.twisting_degree_harmonic, (0,))
+            M_1, M_2, scale = psi
             s = self._low_rank_reconstruct(M_1, M_2, S, uts)
+            s *= scale
         else:
-            print('psi shape', psi.shape)
-            print('uts shape', uts.shape)
-            uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree, (0,1,2))
+            #print('psi shape', psi.shape)
+            #print('uts shape', uts.shape)
+            uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree_harmonic, (0,1,2))
             s = jnp.squeeze(jnp.einsum("...hmn, ...amn->...ha", psi, uts))
 
-        return s
+        s_norm = jnp.linalg.norm(s, keepdims=True)
+        return s# / s_norm
 
     def harmonic_rep(self, p, params):
         p_c = math_utils.to_complex(p)
@@ -1759,18 +1819,21 @@ class HarmonicForm(HarmonicBundle):
         return codiff_eta
     
     @partial(jax.jit, static_argnums=(0,))
-    def objective_function(self, data, params, norm_control=True,
-                           full_contraction=False, MAX_NORM=10.):
+    def objective_function(self, data, params, sentinel=None, norm_control=True,
+                           full_contraction=True, MAX_NORM=150.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
         codiff = jnp.squeeze(codiff)  # [..., i]
+        #return codiff
 
         if norm_control is True:
             codiff_norm = vmap(jnp.linalg.norm)(codiff) / self.n_harmonic  # don't squeeze
-            codiff = jnp.where(jnp.expand_dims(codiff_norm, (1,2)) < MAX_NORM, codiff, 0.)
+            valid_mask = (codiff_norm < MAX_NORM).astype(w.dtype)
+            # scale = jnp.minimum(1.0, MAX_NORM / (codiff_norm + 1e-6))
+            # codiff = codiff * jnp.expand_dims(scale, (1, 2))
+            # codiff = jnp.where(jnp.expand_dims(codiff_norm, (1,2)) < MAX_NORM, codiff, 0.)
 
-        # return codiff
         if full_contraction is True:
             H = vmap(self.H_metric_fn)(p)
             integrand = jnp.einsum("...ab, ...ha, ...hb->...", H, codiff, jnp.conj(codiff))
@@ -1778,8 +1841,10 @@ class HarmonicForm(HarmonicBundle):
             return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
         
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1) 
+        w_valid = w * valid_mask
         # abs_codiff = jnp.where(abs_codiff < MAX_NORM, abs_codiff, 0.)
-        loss = jnp.mean(abs_codiff * jnp.expand_dims(w, 1)) / vol_Omega
+        # loss = jnp.mean(abs_codiff * jnp.expand_dims(w, 1)) / vol_Omega
+        loss = jnp.mean(abs_codiff * jnp.expand_dims(w_valid, 1)) / jnp.mean(w_valid)
         return loss
     
     @partial(jax.jit, static_argnums=(0,))
@@ -1795,6 +1860,7 @@ class HarmonicForm(HarmonicBundle):
         _weights = jnp.expand_dims(det_g * weights / dVol_Omega, axis=(1,2))
         return jnp.mean(integrand * _weights, axis=0) / vol_g
     
+    @partial(jax.jit, static_argnums=(0,))
     def loss_breakdown(self, data, params):
 
         p, pb, w = data
@@ -1825,8 +1891,9 @@ class HarmonicForm(HarmonicBundle):
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
         Tr_F_g = vmap(jnp.trace)(g_tr_F)
 
-        return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, "max_eig": jnp.mean(w * max_eig) / vol_Omega,
-                'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega,
+        return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, 
+                # "max_eig": jnp.mean(w * max_eig) / vol_Omega, 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, 
+                "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'codiff_norm': jnp.mean(w * jnp.abs(codiff_integrand)) / vol_Omega,
                 'Λ_F_0_energy': jnp.mean(w * energy) / vol_Omega, 'G_Kahler': jnp.diag(G_matter),
                 'G_matter_eigvals': G_matter_eigvals}
@@ -1854,7 +1921,11 @@ class HarmonicForm(HarmonicBundle):
         self.eval_interval_t = 4096  # iterations
 
         storage = defaultdict(list)
-        logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
+        import logging
+        if logging.getLogger(self.name).hasHandlers():
+            logger = logging.getLogger(self.name)
+        else:
+            logger = utils.logger_setup(self.name, filepath=os.path.abspath(__file__))
         data_path = os.path.join(data_path, 'dataset.npz')
         os.makedirs(os.path.join("experiments", self.name), exist_ok=True)
         logger.info(f'Dataset: {data_path}')
@@ -1886,7 +1957,7 @@ class HarmonicForm(HarmonicBundle):
 
         coeff_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         bundle_harmonic_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
-                n_1=self._N_sb, n_2=self.n_Ok, n_harmonic=self.n_harmonic, use_low_rank_approx=self.use_low_rank_approx,
+                n_1=self.n_Vk, n_2=self.n_Ok_harmonic, n_harmonic=self.n_harmonic, use_low_rank_approx=self.use_low_rank_approx,
                 low_rank_dim=self.low_rank_dim)
 
         _params, _opt_state, _ = create_train_state(_k, bundle_harmonic_model, _tx, data_dim=self.n_homo_coords * 2)

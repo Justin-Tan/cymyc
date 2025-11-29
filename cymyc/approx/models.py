@@ -512,9 +512,10 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
 
     n_harmonic: int = 1
     use_spectral_embedding: bool = True
-    complex_kernel: bool = False
+    complex_kernel: bool = True
     use_low_rank_approx: bool = True
     low_rank_dim: int = 16
+    rank_V: int = 3
 
     def setup(self):
         if self.n_1 < self.n_2:
@@ -535,6 +536,12 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
             self.low_rank_head_n_2 = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
                                                 self.low_rank_dim, self.n_2), "...i, ...ihlm->...hlm", 
                                                 name='lr_coeffs_n2', complex_kernel=self.complex_kernel)
+            scale_init = 10.
+            self.scale = self.param(
+                "lr_scale",
+                nn.initializers.constant(scale_init),
+                (len(self.ambient) * self.n_harmonic, self.rank_V),
+            )
         else:
             # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
             self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
@@ -587,7 +594,7 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
         if self.use_low_rank_approx is True:
             M_1, M_2 = self.lr_approx(_x)
             print(f'{self.__call__.__qualname__}, low rank shapes, {M_1.shape}, {M_2.shape}')
-            return M_1, M_2
+            return M_1, M_2, self.scale
 
         if self.common_ambient_space:
             coeffs = self.coeff_layer(_x)  # [..., n_A * n_harmonic, n_1, n_2]
@@ -720,7 +727,7 @@ def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_c
     print(f'Compiling {coeff_head_holoV.__qualname__}')
     # last layer is coeff_layer
     print(sorted(params.keys()))
-    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if 'kernel' in params[k].keys()]
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if type(params[k]) is dict and 'kernel' in params[k].keys()]
 
     variables = {'params': params}
     return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
