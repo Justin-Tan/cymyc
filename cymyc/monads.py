@@ -49,9 +49,9 @@ class HarmonicBundle:
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
         # CHANGE THIS
         self.rank_V = 3
-        self.twisting_degree = 4  # 2 for ABKO, 1 for DKLR, 3 for AG
+        self.twisting_degree = 3 #4  # 2 for ABKO, 1 for DKLR, 3 for AG
         self.line_bundle_B = (1,1,1,1)    # (1,1,1,1)
-        self.line_bundle_A_twist = 1
+        self.line_bundle_A_twist = 0 #1
         self.default_idx = 0
 
 
@@ -192,66 +192,6 @@ class HarmonicBundle:
         H_fs = jnp.eye(self.rank_B, dtype=cdtype) * jnp.exp(log_H)
         return H_fs
 
-    @staticmethod
-    def _to_real_vec(z):
-        # complex vector -> real 2n vector (Re, Im)
-        return jnp.concatenate([jnp.real(z), jnp.imag(z)], axis=-1)
-
-    @staticmethod
-    def _J_op(v):
-        # Complex structure on R^{2n}: J(x,y)=(-y,x)
-        n = v.shape[-1] // 2
-        x, y = v[..., :n], v[..., n:]
-        return jnp.concatenate([-y, x], axis=-1)
-
-    @staticmethod
-    def _hess_dir2(f_scalar, x, u, v):
-        # Second directional derivative H[u,v] via nested JVPs; f_scalar: R^{2n} -> R
-        return jax.jvp(lambda xx: jax.jvp(f_scalar, (xx,), (u,))[1], (x,), (v,))[1]
-
-    def _ddbar_scalar_hvp_in_pb(self, p, pb, f_scalar):
-        """
-        Compute ∂∂̄ f at p in the holomorphic frame given by pb using HVPs only.
-        Returns a complex (n x n) matrix.
-        """
-        x = p  # real coords (2n,)
-        U = vmap(self._to_real_vec)(pb)     # [n, 2n]
-        JU = vmap(self._J_op)(U)
-
-        def ddbar_ij(ui, vi, jui, jvi):
-            H_uv   = self._hess_dir2(f_scalar, x, ui,  vi)
-            H_JuJv = self._hess_dir2(f_scalar, x, jui, jvi)
-            H_Juv  = self._hess_dir2(f_scalar, x, jui, vi)
-            H_uJv  = self._hess_dir2(f_scalar, x, ui,  jvi)
-            real_part = 0.25 * (H_uv + H_JuJv)
-            imag_part = -0.25 * (H_Juv - H_uJv)
-            return real_part + 1j * imag_part
-
-        ddbar = vmap(
-            lambda ui, jui: vmap(lambda vi, jvi: ddbar_ij(ui, vi, jui, jvi))(U, JU)
-        )(U, JU)  # [n, n] complex
-        return ddbar
-
-    def _logdet_H_scalar(self, p, endo_params):
-        # log det H via Cholesky for stability
-        H = self.section_metric_network(p, endo_params)
-        L = jnp.linalg.cholesky(H)
-        return 2.0 * jnp.sum(jnp.log(jnp.real(jnp.diag(L))))
-
-    def _logdet_H0_scalar(self, p):
-        H0 = self.fubini_study_metric_twist_V(p)
-        L = jnp.linalg.cholesky(H0)
-        return 2.0 * jnp.sum(jnp.log(jnp.real(jnp.diag(L))))
-
-    @partial(jax.jit, static_argnums=(0,))
-    def ddbar_log_det_H_hvp(self, p, pb, endo_params):
-        f_scalar = lambda x: self._logdet_H_scalar(x, endo_params)
-        return self._ddbar_scalar_hvp_in_pb(p, pb, f_scalar)
-
-    @partial(jax.jit, static_argnums=(0,))
-    def ddbar_log_det_H0_hvp(self, p, pb):
-        f_scalar = lambda x: self._logdet_H0_scalar(x)
-        return self._ddbar_scalar_hvp_in_pb(p, pb, f_scalar)
 
     def fubini_study_metric_V(self, p, cdtype=np.complex64):
         r"""FS reference metric on subbundle $\iota V: \righthookarrow B$ of
@@ -776,7 +716,7 @@ class HarmonicBundle:
         h = h_lr + h_diag
         return h
 
-    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
+    def _endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
@@ -823,7 +763,7 @@ class HarmonicBundle:
         return h
     
 
-    def _endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
+    def endomorphism_network(self, p, params, conf_params=None, conformal_factor=True, frame_idx=None):
         r"""
         Model a section of the endomorphism bundle on $V$ as a matrix of coefficients (each of which is 
         a global function), which parameterise the section via a linear combination of a section of 
@@ -870,10 +810,9 @@ class HarmonicBundle:
             return h * jnp.exp(f)
         return h
 
-    @partial(jax.jit, static_argnums=(0,))
-    def untwisted_metric(self, p, params, conf_params=None):
+    def untwisted_metric(self, p, params, conf_params=None, frame_idx=None):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
-        H_K = self.section_metric_network(p, params, conf_params)
+        H_K = self.section_metric_network(p, params, conf_params, frame_idx=frame_idx)
         det_H_K = jnp.linalg.det(H_K)
         return H_K * (det_H_K)**(-1./self.rank_V)
 
@@ -1577,17 +1516,21 @@ class GenDonaldson(HarmonicBundle):
 
 class HarmonicForm(HarmonicBundle):
 
-    def __init__(self, metric_fn, H_metric_fn, monomials, coefficients, cy_dim, ambient, 
+    def __init__(self, metric_fn, monomials, coefficients, cy_dim, ambient, 
                  fixed_params, defining_polys=None):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
-        self.H_metric_fn = H_metric_fn  # HYM metric on V
+        # self.H_metric_fn = H_metric_fn  # HYM metric on V
       # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         # self.family_ids = [2,6,8,22] #,40,42,45,49]
-        self.family_ids = [2,] #,40,42,45,49]
+        self.family_ids = [2,6] #,40,42,45,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
-        self.use_low_rank_approx = False
+        self.H_Vk_metric_fn = jax.tree_util.Partial(self.section_metric_network, params=self.endo_params, conf_params=self.conf_params)
+        self.H_fn = jax.tree_util.Partial(self.untwisted_metric, params=self.endo_params, conf_params=self.conf_params)
+        self.H_metric_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
+                                     conf_params=self.conf_params)
+        self.use_low_rank_approx = True
         self.low_rank_dim = 16
         self.line_bundle_C = 4
         self.twisting_degree_harmonic = 3
@@ -1645,11 +1588,13 @@ class HarmonicForm(HarmonicBundle):
         return jnp.einsum("...hav, ...uv->...hau", del_bar_mu, jnp.conjugate(pb))
 
     @partial(jax.jit, static_argnums=(0,))
-    def H1XV_representatives(self, p):
+    def H1XV_representatives(self, p, frame_idx=None):
         """
         Representatives of the $H^1(X;V)$ cohomology
         """
-        frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        p_c = math_utils.to_complex(p)
+        if frame_idx is None:
+            frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         nu = self.del_bar_section_B(p)
         # project onto subbundle
         emb = self.embedding_matrix_twisted(p, frame_idx) 
@@ -1758,6 +1703,22 @@ class HarmonicForm(HarmonicBundle):
         emb = self.embedding_matrix_twisted(p, frame_idx)  # rows in 'frame_idx'
         return emb @ section_matrix
     
+    def det_line_bundle_metric(self, p):
+        det_H_Vk = jnp.abs(jnp.linalg.det(self.H_Vk_metric_fn(p)))
+        return jnp.power(det_H_Vk, 1./self.rank_V)
+
+    def det_line_bundle_metric_fast(self, p):
+        H_Vk_fs = self.fubini_study_metric_twist_V(p)
+        f = self.conformal_rescale_network(p, self.conf_params)
+        det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk_fs)) * jnp.exp(self.rank_V * f)
+        return jnp.power(det_H_Vk, 1./self.rank_V)
+
+    def untwisted_metric_fast(self, p, params, conf_params=None, frame_idx=None):
+        # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
+        H_K = self.section_metric_network(p, params, conf_params, frame_idx=frame_idx)
+        det_H_Vk_scaled = self.det_line_bundle_metric_fast(p)
+        return H_K / det_H_Vk_scaled
+
     def section_combination(self, p, params, frame_idx=None, drop_patch_idx=None):
         """
         Get twisted basis of sections, untwist, and combine using coefficients output by a 
@@ -1777,46 +1738,56 @@ class HarmonicForm(HarmonicBundle):
         S = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
+        # H_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)
+        det_H_untwist = self.det_line_bundle_metric_fast(p)
 
         # get coefficients from NN
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
                                       n_1=self.n_Vk, n_2=self.n_Ok_harmonic, n_harmonic=self.n_harmonic,
                                       use_low_rank_approx=self.use_low_rank_approx, low_rank_dim=self.low_rank_dim)
 
+        # untwisting_factor = jnp.conjugate(Ok_monomials) / jnp.expand_dims(H_fs_untwist, (0,))
+        untwisting_factor = jnp.conjugate(Ok_monomials) * jnp.expand_dims(det_H_untwist, (0,))
+
         if self.use_low_rank_approx is True:
-            uts = jnp.conjugate(Ok_monomials) / jnp.expand_dims(z_norm**self.twisting_degree_harmonic, (0,))
             M_1, M_2, scale = psi
-            s = self._low_rank_reconstruct(M_1, M_2, S, uts)
-            s *= scale
+            s = self._low_rank_reconstruct(M_1, M_2, S, untwisting_factor)
+            # s *= scale
         else:
             #print('psi shape', psi.shape)
             #print('uts shape', uts.shape)
-            uts = jnp.einsum("...n, ...am->...amn", jnp.conjugate(Ok_monomials), S) / jnp.expand_dims(z_norm**self.twisting_degree_harmonic, (0,1,2))
-            s = jnp.einsum("...hmn, ...amn->...ha", psi, uts)
+            untwisted_basis = jnp.einsum("...n, ...am->...amn", untwisting_factor, S)
+            s = jnp.einsum("...hmn, ...amn->...ha", psi, untwisted_basis)
             if self.n_harmonic > 1: s = jnp.squeeze(s)
 
         s_norm = jnp.linalg.norm(s, keepdims=True)
         return s# / s_norm
 
-    def harmonic_rep(self, p, params):
+    def harmonic_rep(self, p, params, frame_idx=None):
         p_c = math_utils.to_complex(p)
         pb = self.pb_fn(p_c)
-        xi = self.H1XV_representatives(p)  # [..., h^1_V, rank_V, cy_dim]
+        xi = self.H1XV_representatives(p, frame_idx)  # [..., h^1_V, rank_V, cy_dim]
         #return xi
-        correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params)
+        correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params, frame_idx)
         if self.n_harmonic == 1: correction_ambient = jnp.expand_dims(correction_ambient, 0)
         form_correction = jnp.einsum('...hai,...ji->...haj', correction_ambient, jnp.conj(pb))
         eta = xi + form_correction
         return eta
 
-    def codifferential_eta(self, p, pb, params):
+    @partial(jax.jit, static_argnums=(0,))
+    def codifferential_eta(self, p, pb, params, frame_idx=None):
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
-        eta = self.harmonic_rep(p, params)  # [..., h^1_V, rank_V, cy_dim]
-        del_z_eta = curvature.del_z(p, self.harmonic_rep, False, params)
+        eta = self.harmonic_rep(p, params, frame_idx)  # [..., h^1_V, rank_V, cy_dim]
+        # return eta
+        del_z_eta = curvature.del_z(p, self.harmonic_rep, False, params, frame_idx)
         if self.n_harmonic == 1: del_z_eta = jnp.expand_dims(del_z_eta, 0)
         del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, pb)
+        H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
+        #H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
+        #                             conf_params=self.conf_params, frame_idx=frame_idx)
 
-        A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
+        # A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
+        A = self.connection_form_V(p, H_fn)  # A_a^b_{\mu}
         A_eta_contract = jnp.einsum("...cau, ...hcv->...havu", A, eta)
         covariant_derivative_eta = del_z_eta + A_eta_contract
         codiff_eta = jnp.einsum("...vu, ...havu->...ha", g_inv, covariant_derivative_eta)
@@ -1824,7 +1795,7 @@ class HarmonicForm(HarmonicBundle):
     
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params, sentinel=None, norm_control=True,
-                           full_contraction=True, MAX_NORM=150.):
+                           full_contraction=False, MAX_NORM=100.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)

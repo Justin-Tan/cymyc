@@ -512,7 +512,7 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
 
     n_harmonic: int = 1
     use_spectral_embedding: bool = True
-    complex_kernel: bool = True
+    complex_kernel: bool = False
     use_low_rank_approx: bool = True
     low_rank_dim: int = 16
     rank_V: int = 3
