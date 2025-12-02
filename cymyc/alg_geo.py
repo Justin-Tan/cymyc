@@ -99,10 +99,16 @@ def poincare_residue(dQdz, elim_idx):
     """
     return 1./dQdz[elim_idx]
 
-def argmax_dQdz(points, dQdz):
+def argmax_dQdz(points, dQdz, aux=False):
     # Finds $$\argmax_i |dQ/dz_i|$$
+    n_coords = points.shape[-1]
     ones_mask = jnp.logical_not(jnp.isclose(points, jax.lax.complex(1.,0.)))
+    total_mask = ones_mask
     elim_idx = jnp.argmax(jnp.abs(dQdz * ones_mask), axis=-1)
+    elim_mask = (jnp.arange(n_coords) == elim_idx[np.newaxis])
+    total_mask *= ~elim_mask
+
+    if aux is True: return elim_idx, total_mask
     return elim_idx
 
 def argmax_dQdz_cicy(p, dQdz, n_hyper, n_coords, aux=False):

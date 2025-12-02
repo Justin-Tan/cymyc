@@ -1720,12 +1720,12 @@ class HarmonicForm(HarmonicBundle):
         fs = jnp.linalg.inv(fs_inv)
         return fs
 
-    def det_line_bundle_metric(self, p):
-        det_H_Vk = jnp.abs(jnp.linalg.det(self.H_Vk_metric_fn(p)))
+    def det_line_bundle_metric(self, p, frame_idx=None):
+        det_H_Vk = jnp.abs(jnp.linalg.det(self.H_Vk_metric_fn(p, frame_idx=frame_idx)))
         return jnp.power(det_H_Vk, 1./self.rank_V)
 
-    def det_line_bundle_metric_fast(self, p):
-        H_Vk_fs = self.fubini_study_metric_twist_V(p)
+    def det_line_bundle_metric_fast(self, p, frame_idx=None):
+        H_Vk_fs = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
         f = self.conformal_rescale_network(p, self.conf_params)
         det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk_fs)) * jnp.exp(self.rank_V * f)
         return jnp.power(det_H_Vk, 1./self.rank_V)
@@ -1809,9 +1809,9 @@ class HarmonicForm(HarmonicBundle):
         del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, pb)
         # return jnp.einsum("...vu, ...havu->...ha", g_inv, del_z_eta)
         #H_fn = jax.tree_util.Partial(self.untwisted_metric_FS, frame_idx=frame_idx)
-        H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
-        #H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
-        #                             conf_params=self.conf_params, frame_idx=frame_idx)
+        #H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
+        H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
+                                     conf_params=self.conf_params, frame_idx=frame_idx)
 
         # A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
         A = self.connection_form_V(p, H_fn)  # A_a^b_{\mu}
@@ -2045,7 +2045,8 @@ class HarmonicForm(HarmonicBundle):
         p_c = math_utils.to_complex(p)
         ones_mask = jnp.logical_not(jnp.isclose(p_c, jax.lax.complex(1.,0.)))
         dQdz_homo = alg_geo.evaluate_dQdz(p_c, self.dQdz_monomials, self.dQdz_coeffs)
-        elim_idx, good_coord_mask_full = alg_geo.argmax_dQdz_cicy(p_c, dQdz_homo, self.n_hyper, self.n_homo_coords, True)
+        # elim_idx, good_coord_mask_full = alg_geo.argmax_dQdz_cicy(p_c, dQdz_homo, self.n_hyper, self.n_homo_coords, True)
+        elim_idx, good_coord_mask_full = alg_geo.argmax_dQdz(p_c, dQdz_homo, True)
         good_coord_mask = good_coord_mask_full[jnp.nonzero(ones_mask, size=self.n_inhomo_coords)]
         return ones_mask, good_coord_mask_full, elim_idx
 
@@ -2076,3 +2077,23 @@ class HarmonicForm(HarmonicBundle):
             return jnp.concatenate((all_possible_patches, pad), axis=0)
 
         return all_possible_patches
+
+    @staticmethod
+    def project_coords(A, mask, size):
+        return jnp.squeeze(A[jnp.nonzero(mask, size=size), ...])
+
+    @partial(jit, static_argnums=(0,))
+    def Jacobian_transition_map(self, p_repeated, other_patch_mask, dQ_elim_mask):
+        """
+        Returns Jacobian pushforward matrix [dy^a/dx^b]_{a,b}.
+        """
+        # `vmap` across different patches for the same example point
+        _pb = vmap(self.pb_fn)(math_utils.to_complex(p_repeated))
+        combined_mask = jnp.logical_not(other_patch_mask) * dQ_elim_mask
+        
+        T_jac_ambient = vmap(curvature.del_z, in_axes=(0,None,None,0,0))(p_repeated, self.transition_map, False,
+                                                                other_patch_mask, dQ_elim_mask)
+
+        T_jac = vmap(self.project_coords, in_axes=(0,0,None))(T_jac_ambient, combined_mask, self.cy_dim)
+        T_jac = jnp.einsum('...ij,...aj->...ia', T_jac, _pb)
+        return T_jac
