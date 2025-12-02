@@ -448,7 +448,13 @@ def compute_pullbacks(points, dQdz_info, cy_dim, cdtype=np.complex128):
     dQdz_monomials, dQdz_coefficients = [di.astype(cdtype) for di in dQdz_info]
     elim_idx, ones_idx, dQdz, good_dQdz_rescale, good_coords_mask = _create_pullback_mask(points, dQdz_monomials, dQdz_coefficients)
     pbs = _pullbacks(points, elim_idx, ones_idx, good_dQdz_rescale, good_coords_mask, cy_dim, cdtype)
+    return pbs
 
+@partial(jit, static_argnums=(2,3))
+def compute_pullbacks_set_dQ_elim(points, elim_idx, dQdz_info, cy_dim, cdtype=np.complex128):
+    dQdz_monomials, dQdz_coefficients = [di.astype(cdtype) for di in dQdz_info]
+    _, ones_idx, dQdz, good_dQdz_rescale, good_coords_mask = _create_pullback_mask(points, dQdz_monomials, dQdz_coefficients)
+    pbs = _pullbacks(points, elim_idx, ones_idx, good_dQdz_rescale, good_coords_mask, cy_dim, cdtype)
     return pbs
 
 @partial(jit, static_argnums=(3,))
