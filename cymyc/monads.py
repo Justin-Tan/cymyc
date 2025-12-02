@@ -1533,11 +1533,11 @@ class HarmonicForm(HarmonicBundle):
         self.use_low_rank_approx = True
         self.low_rank_dim = 16
         self.line_bundle_C = 4
-        self.twisting_degree_harmonic = 3
+        self.twisting_degree_harmonic = self.twisting_degree + 1
         self.line_bundle_A_twist_harmonic = 0
 
         self.Ok_powers_harmonic = self.degree_to_monomial_basis[self.twisting_degree_harmonic]
-        self.monomial_basis = poly_utils.MonomialBasisReduced(ambient, self.twisting_degree_harmonic + self.line_bundle_B[0], defining_polys)
+        self.monomial_basis = poly_utils.MonomialBasisReduced(ambient, self.twisting_degree + self.line_bundle_B[0], defining_polys)
 
         mbl, mbq = poly_utils.MonomialBasis(ambient, 1), poly_utils.MonomialBasis(ambient, 2)
         monomials_B = mbl.power_matrix
@@ -1548,11 +1548,18 @@ class HarmonicForm(HarmonicBundle):
         self.quotient_basis, ideal_generators, groebner_basis = poly_utils.get_quotient_basis(variables, _monad_map_AG, 
                                                                                    monomials_B, monomials_C)
         monad_map_degree = int(self.monad_map_power_matrix.max())
+
         self.n_Ok_harmonic = poly_utils.dim_OXk(self.ambient, self.twisting_degree_harmonic, self.monomial_basis.mod_degree)
         self.n_quotient_harmonic = math.comb(self.ambient_dim + self.twisting_degree_harmonic - monad_map_degree,
                 self.twisting_degree_harmonic - monad_map_degree)
-        self.n_Vk = self.rank_B * self.n_Ok_harmonic - self.n_quotient_harmonic
+        self.n_Vk = self.rank_B * self.n_Ok - self.n_quotient
 
+
+        self.proj_idx = jnp.asarray(utils._generate_proj_indices(self.degrees))
+        self.bounds = jnp.cumsum(jnp.concatenate((jnp.zeros(1), self.degrees)))
+        self.n_transitions = utils._patch_transitions(self.n_hyper, len(self.ambient), self.degrees)
+        self.n_ambient = len(self.ambient)
+        self.n_projective = len(ambient)  # number of projective space factors
 
     def preimage_monomials(self, q_basis_element):
         return jnp.expand_dims(q_basis_element,0) - self.monad_map_power_matrix
@@ -1597,9 +1604,9 @@ class HarmonicForm(HarmonicBundle):
             frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         nu = self.del_bar_section_B(p)
         # project onto subbundle
-        emb = self.embedding_matrix_twisted(p, frame_idx) 
-        nu = jnp.einsum("...ax, ...hxj->...haj", emb, nu)
-        # nu = jnp.delete(nu, frame_idx, axis=-2, assume_unique_indices=True)
+        #emb = self.embedding_matrix_twisted(p, frame_idx) 
+        #nu = jnp.einsum("...ax, ...hxj->...haj", emb, nu)
+        nu = jnp.delete(nu, frame_idx, axis=-2, assume_unique_indices=True)
 
         # select families for testing
         return jnp.take(nu, np.asarray(self.family_ids), axis=0)
@@ -1694,7 +1701,7 @@ class HarmonicForm(HarmonicBundle):
         # trivial monomial position relative to the chosen frame
         trivial_idx = self._trivial_mono_index_Pn_harmonic(self.Ok_powers_harmonic, coord_j=drop_patch_idx,
                 k=self.twisting_degree_harmonic)
-        col_to_delete = drop_patch_idx * self.n_Ok_harmonic + trivial_idx
+        col_to_delete = drop_patch_idx * self.n_Ok + trivial_idx
         if quotient is True:
             section_matrix = jnp.delete(section_matrix, col_to_delete, axis=-1, assume_unique_indices=True)
 
@@ -1703,6 +1710,16 @@ class HarmonicForm(HarmonicBundle):
         emb = self.embedding_matrix_twisted(p, frame_idx)  # rows in 'frame_idx'
         return emb @ section_matrix
     
+    def fubini_study_metric_twist_V_harmonic(self, p, inv=False, frame_idx=None):
+        if frame_idx is None:
+            frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        tsb = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
+
+        fs_inv = jnp.einsum("...am, ...bm->...ba", tsb, jnp.conjugate(tsb))
+        if inv is True: return fs_inv
+        fs = jnp.linalg.inv(fs_inv)
+        return fs
+
     def det_line_bundle_metric(self, p):
         det_H_Vk = jnp.abs(jnp.linalg.det(self.H_Vk_metric_fn(p)))
         return jnp.power(det_H_Vk, 1./self.rank_V)
@@ -1735,24 +1752,27 @@ class HarmonicForm(HarmonicBundle):
         if frame_idx is None:
             p_c = math_utils.to_complex(p)
             frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
-        S = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
+        # S = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
+        S = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
+        H_FS_untwist_harmonic = self.fubini_study_metric_twist_V_harmonic(p, frame_idx=frame_idx)
+        S_flat = jnp.einsum("...bm, ...ab->...am", jnp.conj(S), H_FS_untwist_harmonic)
 
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
-        # H_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)
-        det_H_untwist = self.det_line_bundle_metric_fast(p)
+        h_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)  # line bundle metric
+        # det_H_untwist = self.det_line_bundle_metric_fast(p)
 
         # get coefficients from NN
         psi = models.coeff_head_holoV(p, params, self.n_homo_coords, tuple(self.ambient), 
                                       n_1=self.n_Vk, n_2=self.n_Ok_harmonic, n_harmonic=self.n_harmonic,
                                       use_low_rank_approx=self.use_low_rank_approx, low_rank_dim=self.low_rank_dim)
 
-        # untwisting_factor = jnp.conjugate(Ok_monomials) / jnp.expand_dims(H_fs_untwist, (0,))
-        untwisting_factor = jnp.conjugate(Ok_monomials) * jnp.expand_dims(det_H_untwist, (0,))
+        untwisting_factor = jnp.conjugate(Ok_monomials)# / jnp.expand_dims(h_fs_untwist, (0,))
+        # untwisting_factor = jnp.conjugate(Ok_monomials) * jnp.expand_dims(det_H_untwist, (0,))
 
         if self.use_low_rank_approx is True:
             M_1, M_2, scale = psi
-            s = self._low_rank_reconstruct(M_1, M_2, S, untwisting_factor)
-            # s *= scale
+            s = self._low_rank_reconstruct(M_1, M_2, S_flat, untwisting_factor)
+            s *= scale
         else:
             #print('psi shape', psi.shape)
             #print('uts shape', uts.shape)
@@ -1767,29 +1787,37 @@ class HarmonicForm(HarmonicBundle):
         p_c = math_utils.to_complex(p)
         pb = self.pb_fn(p_c)
         xi = self.H1XV_representatives(p, frame_idx)  # [..., h^1_V, rank_V, cy_dim]
-        #return xi
         correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params, frame_idx)
         if self.n_harmonic == 1: correction_ambient = jnp.expand_dims(correction_ambient, 0)
         form_correction = jnp.einsum('...hai,...ji->...haj', correction_ambient, jnp.conj(pb))
         eta = xi + form_correction
         return eta
 
+    def untwisted_metric_FS(self, p, frame_idx=None):
+        H_K = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
+        det_H_K = jnp.linalg.det(H_K)
+        return H_K * (det_H_K)**(-1./(self.rank_V))
+
     @partial(jax.jit, static_argnums=(0,))
-    def codifferential_eta(self, p, pb, params, frame_idx=None):
+    def codifferential_eta(self, p, params, frame_idx=None):
+        p_c = math_utils.to_complex(p)
+        pb = self.pb_fn(p_c)
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
         eta = self.harmonic_rep(p, params, frame_idx)  # [..., h^1_V, rank_V, cy_dim]
-        # return eta
         del_z_eta = curvature.del_z(p, self.harmonic_rep, False, params, frame_idx)
         if self.n_harmonic == 1: del_z_eta = jnp.expand_dims(del_z_eta, 0)
         del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, pb)
+        # return jnp.einsum("...vu, ...havu->...ha", g_inv, del_z_eta)
+        #H_fn = jax.tree_util.Partial(self.untwisted_metric_FS, frame_idx=frame_idx)
         H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
         #H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
         #                             conf_params=self.conf_params, frame_idx=frame_idx)
 
         # A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
         A = self.connection_form_V(p, H_fn)  # A_a^b_{\mu}
-        A_eta_contract = jnp.einsum("...cau, ...hcv->...havu", A, eta)
-        covariant_derivative_eta = del_z_eta + A_eta_contract
+        # A_eta_contract = jnp.einsum("...cau, ...hcv->...havu", A, eta)
+        A_eta_contract = jnp.einsum("...cau, ...hav->...hcvu", A, eta)
+        covariant_derivative_eta = del_z_eta - A_eta_contract
         codiff_eta = jnp.einsum("...vu, ...havu->...ha", g_inv, covariant_derivative_eta)
         return codiff_eta
     
@@ -1798,7 +1826,7 @@ class HarmonicForm(HarmonicBundle):
                            full_contraction=False, MAX_NORM=100.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
+        codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
         if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)  # [..., i]
         #return codiff
 
@@ -1850,7 +1878,7 @@ class HarmonicForm(HarmonicBundle):
         G_matter = self.inner_product_Hodge(data, eta, g, H)
         G_matter_eigvals = jnp.linalg.eigvalsh(G_matter)
 
-        codiff = vmap(self.codifferential_eta, in_axes=(0,0,None))(p, pb, params)
+        codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
         if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)
         codiff_integrand = jnp.einsum("...ab, ...ha, ...hb->...h", H, codiff, jnp.conj(codiff))
         codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1)) / (self.rank_V**2)
@@ -1985,3 +2013,66 @@ class HarmonicForm(HarmonicBundle):
         utils.save_logs(storage, self.name, 'FIN')
         return _params, storage
 
+
+    def transition_map(self, p, patch_mask, dQ_elim_mask):
+        p = math_utils.to_complex(p)
+        combined_mask = jnp.logical_not(patch_mask) * dQ_elim_mask
+
+        norm = p[jnp.nonzero(patch_mask, size=self.n_projective)].reshape(-1, self.n_projective)
+        if self.n_projective == 1:
+            p_ambient_transformed = p / jnp.squeeze(norm)
+            return p_ambient_transformed
+
+        all_pi_norm = 1.  # need to rescale each projective factor
+        for i in range(self.n_projective):
+            degrees = jnp.ones(self.degrees[i], dtype=np.complex64)
+            pi_norm = degrees * norm[:,i]
+            if i == 0:
+                all_pi_norm = pi_norm
+            else:
+                all_pi_norm = jnp.concatenate((all_pi_norm, pi_norm), axis=-1)
+
+        all_pi_norm = jnp.squeeze(all_pi_norm)
+        p_ambient_transformed = p / all_pi_norm
+
+        return p_ambient_transformed
+
+    def _idx_to_mask(self, idx):
+        mask = jnp.zeros(self.n_homo_coords, dtype=bool)
+        return jnp.logical_not(mask.at[idx].set(True))
+
+    def compute_transition_masks(self, p):
+        p_c = math_utils.to_complex(p)
+        ones_mask = jnp.logical_not(jnp.isclose(p_c, jax.lax.complex(1.,0.)))
+        dQdz_homo = alg_geo.evaluate_dQdz(p_c, self.dQdz_monomials, self.dQdz_coeffs)
+        elim_idx, good_coord_mask_full = alg_geo.argmax_dQdz_cicy(p_c, dQdz_homo, self.n_hyper, self.n_homo_coords, True)
+        good_coord_mask = good_coord_mask_full[jnp.nonzero(ones_mask, size=self.n_inhomo_coords)]
+        return ones_mask, good_coord_mask_full, elim_idx
+
+    def get_different_patches(self, elim_idx, patch_idx):
+        dQ_elim_mask = self._idx_to_mask(elim_idx)
+        Pi_dQ_elim_count = jnp.unique(self.proj_idx[elim_idx], return_counts=True, size=self.n_projective)[-1]
+        splits = self.degrees - Pi_dQ_elim_count
+
+        # index valid coords
+        valid_coord_idx = jnp.where(dQ_elim_mask, size=self.n_homo_coords - self.n_hyper)[-1]
+
+        factors = (valid_coord_idx,) * self.n_projective
+        all_possible_patches = jnp.stack(jnp.meshgrid(*factors, indexing='ij'), axis=-1)
+        all_possible_patches = jnp.reshape(all_possible_patches, (-1, self.n_projective))
+
+        if self.n_projective > 1:
+            # mask out invalid patches
+            carry, stack = jax.lax.scan(self.check_bounds, (0, jnp.ones((self.n_homo_coords - self.n_hyper)**2, dtype=bool)),
+                                                    all_possible_patches.T)
+            all_possible_patches = all_possible_patches[jnp.nonzero(carry[-1], size=self.n_transitions)]
+
+        # possibly redundant
+        n_patches = all_possible_patches.shape[0]
+        if n_patches != self.n_transitions:
+            # pad with current patch index
+            pad = jnp.tile(patch_idx, self.n_transitions - n_patches)
+            pad = jnp.reshape(pad, (-1,self.n_projective,)).astype(np.int32)
+            return jnp.concatenate((all_possible_patches, pad), axis=0)
+
+        return all_possible_patches
