@@ -83,6 +83,9 @@ class HarmonicBundle:
         self.pb_fn = partial(alg_geo.compute_pullbacks,
                     dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
                     cy_dim=self.cy_dim, cdtype=self.cdtype)
+        self.pb_fn_set_dQ_idx = partial(alg_geo.compute_pullbacks_set_dQ_elim,
+                    dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
+                    cy_dim=self.cy_dim, cdtype=self.cdtype)
         
         self.Omega_fn = partial(alg_geo._holomorphic_volume_form, 
                                 n_hyper=self.n_hyper, n_coords=self.n_homo_coords,
@@ -1839,7 +1842,8 @@ class HarmonicForm(HarmonicBundle):
 
         if full_contraction is True:
             H = vmap(self.H_metric_fn)(p)
-            integrand = jnp.einsum("...ab, ...ha, ...hb->...", H, codiff, jnp.conj(codiff))
+            H_inv = vmap(jnp.linalg.inv)(H)
+            integrand = jnp.einsum("...ba, ...ha, ...hb->...", H_inv, codiff, jnp.conj(codiff))
             integrand = jnp.squeeze(integrand) / self.n_harmonic / self.rank_V**2
             return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
         
@@ -1855,8 +1859,8 @@ class HarmonicForm(HarmonicBundle):
         p, pb, weights = data
         weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(math_utils.to_complex(p))
         g_inv = jnp.linalg.inv(g_pred)  # g^{\bar{\nu} \mu}
-
-        integrand = jnp.einsum("...vu, ...mav, ...nbu, ...ab->...mn", g_inv, eta, jnp.conj(eta), H_pred)
+        H_inv = jnp.linalg.inv(H_pred)  # H^{\bar{b} a}
+        integrand = jnp.einsum("...vu, ...mav, ...nbu, ...ba->...mn", g_inv, eta, jnp.conj(eta), H_pred)
         
         det_g = jnp.squeeze(jnp.real(jnp.linalg.det(g_pred)))
         vol_g = jnp.mean(det_g * weights / dVol_Omega)
@@ -1880,7 +1884,8 @@ class HarmonicForm(HarmonicBundle):
 
         codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
         if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)
-        codiff_integrand = jnp.einsum("...ab, ...ha, ...hb->...h", H, codiff, jnp.conj(codiff))
+        H_inv = jnp.linalg.inv(H)
+        codiff_integrand = jnp.einsum("...ba, ...ha, ...hb->...h", H_inv, codiff, jnp.conj(codiff))
         codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1)) / (self.rank_V**2)
 
         F0 = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
