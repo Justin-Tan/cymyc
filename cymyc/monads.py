@@ -1524,17 +1524,16 @@ class HarmonicForm(HarmonicBundle):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         # self.family_ids = [2,6,8,22] #,40,42,45,49]
-        # self.family_ids = [2,6] #,40,42,45,49]
-        self.family_ids = [0,2,8,49]
+        self.family_ids = [2,6] #,40,42,45,49]
+        # self.family_ids = [0,2,8,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
         self.H_Vk_metric_fn = jax.tree_util.Partial(self.section_metric_network, params=self.endo_params, conf_params=self.conf_params)
         self.H_fn = jax.tree_util.Partial(self.untwisted_metric, params=self.endo_params, conf_params=self.conf_params)
-        self.H_metric_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
-                                     conf_params=self.conf_params)
+        self.H_metric_fn = self.untwisted_metric_fast
         self.use_low_rank_approx = True
-        self.low_rank_dim = 24  # 16
+        self.low_rank_dim = 16
         self.line_bundle_C = 4
         self.twisting_degree_harmonic = self.twisting_degree + 1
         self.line_bundle_A_twist_harmonic = 0
@@ -1733,10 +1732,10 @@ class HarmonicForm(HarmonicBundle):
         det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk_fs)) * jnp.exp(self.rank_V * f)
         return jnp.power(det_H_Vk, 1./self.rank_V)
 
-    def untwisted_metric_fast(self, p, params, conf_params=None, frame_idx=None):
+    def untwisted_metric_fast(self, p, frame_idx=None):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
-        H_K = self.section_metric_network(p, params, conf_params, frame_idx=frame_idx)
-        det_H_Vk_scaled = self.det_line_bundle_metric_fast(p)
+        H_K = self.section_metric_network(p, self.endo_params, self.conf_params, frame_idx=frame_idx)
+        det_H_Vk_scaled = self.det_line_bundle_metric_fast(p, frame_idx=frame_idx)
         return H_K / det_H_Vk_scaled
 
     def section_combination(self, p, params, frame_idx=None, drop_patch_idx=None):
@@ -1797,9 +1796,19 @@ class HarmonicForm(HarmonicBundle):
         return eta
 
     def untwisted_metric_FS(self, p, frame_idx=None):
-        H_K = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
+        H_K = self.fubini_study_metric_twist_V_harmonic(p, frame_idx=frame_idx)
         det_H_K = jnp.linalg.det(H_K)
         return H_K * (det_H_K)**(-1./(self.rank_V))
+
+    def _untwisted_metric(self, p, frame_idx=None):
+        H_Vk = self.H_Vk_metric_fn(p, frame_idx=frame_idx)
+        # line bundle metric h_fs on $L$
+        z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
+        h_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)
+        return H_Vk * h_fs_untwist
+
+        # det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk))
+        # return H_Vk / jnp.power(det_H_Vk, 1./self.rank_V)
 
     @partial(jax.jit, static_argnums=(0,))
     def codifferential_eta(self, p, params, frame_idx=None):
@@ -1811,10 +1820,11 @@ class HarmonicForm(HarmonicBundle):
         if self.n_harmonic == 1: del_z_eta = jnp.expand_dims(del_z_eta, 0)
         del_z_eta = jnp.einsum("...havi, ...ui->...havu", del_z_eta, pb)
         # return jnp.einsum("...vu, ...havu->...ha", g_inv, del_z_eta)
-        #H_fn = jax.tree_util.Partial(self.untwisted_metric_FS, frame_idx=frame_idx)
-        #H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
-        H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
-                                     conf_params=self.conf_params, frame_idx=frame_idx)
+        # H_fn = jax.tree_util.Partial(self.untwisted_metric, frame_idx=frame_idx)
+        # H_fn = jax.tree_util.Partial(self.H_metric_fn, frame_idx=frame_idx)
+        H_fn = jax.tree_util.Partial(self._untwisted_metric, frame_idx=frame_idx)
+        #H_fn = jax.tree_util.Partial(self.untwisted_metric_fast, params=self.endo_params,
+        #                             conf_params=self.conf_params, frame_idx=frame_idx)
 
         # A = self.connection_form_V(p, self.H_metric_fn)  # A_a^b_{\mu}
         A = self.connection_form_V(p, H_fn)  # A_a^b_{\mu}
@@ -1961,7 +1971,7 @@ class HarmonicForm(HarmonicBundle):
           optax.clip(grad_threshold),
           optax.adamw(learning_rate=lr),
         )
-        self.n_units_harmonic = [48,48,48]
+        self.n_units_harmonic = [48,48,32]
 
         coeff_class = models.CoeffNetwork_spectral_nn_CICY_holoV
         bundle_harmonic_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
