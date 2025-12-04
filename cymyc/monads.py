@@ -1756,9 +1756,9 @@ class HarmonicForm(HarmonicBundle):
             frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         # S = self.twisted_section_basis_in_frame_harmonic(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
         S = self.twisted_section_basis_in_frame(p, frame_idx=frame_idx, drop_patch_idx=self.default_idx)
-        # H_untwist_harmonic = self.fubini_study_metric_twist_V_harmonic(p, frame_idx=frame_idx)
+        H_untwist_harmonic = self.fubini_study_metric_twist_V_harmonic(p, frame_idx=frame_idx)
         # H_untwist_harmonic = self.H_Vk_metric_fn(p, frame_idx=frame_idx)
-        H_untwist_harmonic = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
+        # H_untwist_harmonic = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
         S_flat = jnp.einsum("...bm, ...ab->...am", jnp.conj(S), H_untwist_harmonic)
         # H_fn = jax.tree_util.Partial(self._untwisted_metric, frame_idx=frame_idx)
         # H_V = H_fn(p, frame_idx=frame_idx)
@@ -1809,8 +1809,8 @@ class HarmonicForm(HarmonicBundle):
         H_Vk = self.H_Vk_metric_fn(p, frame_idx=frame_idx)
         # line bundle metric h_fs on $L$
         z_norm = jnp.sum(jnp.abs(p)**2, axis=-1)
-        # h_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)
-        h_fs_untwist = jnp.power(z_norm, self.twisting_degree)
+        h_fs_untwist = jnp.power(z_norm, self.twisting_degree_harmonic)
+        # h_fs_untwist = jnp.power(z_norm, self.twisting_degree)
         return H_Vk * h_fs_untwist
 
         # det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk))
