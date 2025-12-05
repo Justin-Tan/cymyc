@@ -93,6 +93,7 @@ class LearnedVector_spectral_nn(nn.Module):
     use_spectral_embedding: bool = True
     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
     cy_dim: int = 3
+    complex_out: bool = False
     
     def setup(self):
         self.n_hidden = len(self.n_units)
@@ -158,7 +159,11 @@ class LearnedVector_spectral_nn(nn.Module):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
             
-        out = nn.Dense(self.n_out, name='scalar')(x)
+        if self.complex_out is True:
+            out = nn.Dense(self.n_out * 2, name='complex scalar')(x)
+            out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
+        else:
+            out = nn.Dense(self.n_out, name='scalar')(x)
         return jnp.squeeze(out)
 
 class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
@@ -206,8 +211,12 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
             
-        out = nn.Dense(self.n_out, name='scalar')(x)
-        return jnp.squeeze(out)
+        if self.complex_out is True:
+            out = nn.Dense(self.n_out * 2, name='complex scalar')(x)
+            out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
+        else:
+            out = nn.Dense(self.n_out, name='scalar')(x)
+        return out
     
 class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     r"""
@@ -512,8 +521,8 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
 
     n_harmonic: int = 1
     use_spectral_embedding: bool = True
-    complex_kernel: bool = False
-    use_low_rank_approx: bool = True
+    complex_kernel: bool = True
+    use_low_rank_approx: bool = False  # True
     low_rank_dim: int = 16
     rank_V: int = 3
 
@@ -526,7 +535,7 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
         self.dims = np.array(self.ambient) + 1  # coords for each ambient space factor
 
         self.layers = [nn.Dense(f) for f in self.n_units]
-        self.ln_final = nn.LayerNorm()
+        # self.ln_final = nn.LayerNorm()
 
         self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
         if not self.common_ambient_space: raise NotImplementedError
@@ -545,9 +554,14 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
             )
         else:
             # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
-            self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
-                                                self.n_1, self.n_2), "...i, ...ihab->...hab", 
-                                                name='layers_coeffs', complex_kernel=self.complex_kernel)
+            if self.n_2 > 1:
+                self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                    self.n_1, self.n_2), "...i, ...ihab->...hab", 
+                                                    name='layers_coeffs', complex_kernel=self.complex_kernel)
+            else:
+                self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                    self.n_1), "...i, ...iha->...ha", 
+                                                    name='layers_coeffs', complex_kernel=self.complex_kernel)
         
     def lr_approx(self, x):
         M_1 = self.low_rank_head_n_1(x)
@@ -610,10 +624,11 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
             print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
             return coeffs
 
-@partial(jit, static_argnums=(2,3,4,5,6))
+@partial(jit, static_argnums=(2,3,4,5,6,7))
 def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int, 
-             ambient: Sequence[int], n_out: int = 1, spectral: bool = True, 
-             activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> Complex[Array, "n_out"]:
+             ambient: Sequence[int], n_out: int = 1, spectral: bool = True,
+             activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu,
+             complex_out: bool = False) -> Complex[Array, "n_out"]:
     r"""Wrapper to feed parameters into forward pass for $\phi$-component in 
     the `ddbar_phi_model`.
 
@@ -641,14 +656,16 @@ def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
         Output of vector-valued function.
     """
     print(f'Compiling {phi_head.__qualname__}')
-    n_units = [params[k]['kernel'].shape[-1] for k in params.keys()][:-1]
+    n_units = [params[k]['kernel'].shape[-1] for k in params.keys() if 'layer' in k]
 
     if (n_hyper > 1) or (len(ambient) > 1):
         return LearnedVector_spectral_nn_CICY(p.shape[-1]//2, ambient, n_units, n_out, 
-                use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
+                use_spectral_embedding=spectral, activation=activation,
+                complex_out=complex_out).apply({'params': params}, p)
 
     return LearnedVector_spectral_nn(p.shape[-1]//2, ambient, n_units, n_out,
-            use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
+            use_spectral_embedding=spectral, activation=activation,
+            complex_out=complex_out).apply({'params': params}, p)
 
 @partial(jit, static_argnums=(2,3))
 def ddbar_phi_model(p: Float[Array, "i"], params: Mapping[str, Array], 
@@ -722,7 +739,7 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
 @partial(jit, static_argnums=(2,3,4,5,6,7,8,9))
 def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
                      ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1, 
-                     use_low_rank_approx: bool = True, low_rank_dim: int = 16, 
+                     use_low_rank_approx: bool = False, low_rank_dim: int = 16, 
                      complex_kernel=False,
                      activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
     r"""Wrapper to feed parameters into forward pass for section coefficient network.
