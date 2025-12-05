@@ -526,6 +526,7 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
         self.dims = np.array(self.ambient) + 1  # coords for each ambient space factor
 
         self.layers = [nn.Dense(f) for f in self.n_units]
+        self.ln_final = nn.LayerNorm()
 
         self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
         if not self.common_ambient_space: raise NotImplementedError
@@ -590,6 +591,8 @@ class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
             _x = layer(_x)
             if i != self.n_hidden - 1:
                 _x = self.activation(_x)
+
+        # _x = self.ln_final(_x)
 
         if self.use_low_rank_approx is True:
             M_1, M_2 = self.lr_approx(_x)

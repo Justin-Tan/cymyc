@@ -1524,7 +1524,7 @@ class HarmonicForm(HarmonicBundle):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         # self.family_ids = [2,6,8,22] #,40,42,45,49]
-        self.family_ids = [2,6] #,40,42,45,49]
+        self.family_ids = [2,] #,40,42,45,49]
         # self.family_ids = [0,2,8,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
@@ -1816,8 +1816,8 @@ class HarmonicForm(HarmonicBundle):
         # det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk))
         # return H_Vk / jnp.power(det_H_Vk, 1./self.rank_V)
 
-    @partial(jax.jit, static_argnums=(0,))
-    def codifferential_eta(self, p, params, frame_idx=None):
+    @partial(jax.jit, static_argnums=(0,4))
+    def codifferential_eta(self, p, params, frame_idx=None, return_eta=False):
         p_c = math_utils.to_complex(p)
         pb = self.pb_fn(p_c)
         g_inv = jnp.linalg.inv(self._metric_fn(p))  # \bar{\nu} \mu
@@ -1838,6 +1838,8 @@ class HarmonicForm(HarmonicBundle):
         A_eta_contract = jnp.einsum("...cau, ...hav->...hcvu", A, eta)
         covariant_derivative_eta = del_z_eta - A_eta_contract
         codiff_eta = jnp.einsum("...vu, ...havu->...ha", g_inv, covariant_derivative_eta)
+
+        if return_eta is True: return codiff_eta, eta
         return codiff_eta
     
     @partial(jax.jit, static_argnums=(0,))
@@ -1845,7 +1847,8 @@ class HarmonicForm(HarmonicBundle):
                            full_contraction=True, MAX_NORM=100.):
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
-        codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
+        # codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
+        codiff, eta = vmap(self.codifferential_eta, in_axes=(0,None,None,None))(p, params, None, True)
         if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)  # [..., i]
         #return codiff
 
@@ -1857,11 +1860,25 @@ class HarmonicForm(HarmonicBundle):
             # codiff = jnp.where(jnp.expand_dims(codiff_norm, (1,2)) < MAX_NORM, codiff, 0.)
 
         if full_contraction is True:
-            H = vmap(self.H_metric_fn)(p)
+            # H = vmap(self.H_metric_fn)(p)
+            H = vmap(self._untwisted_metric)(p)
             H_inv = vmap(jnp.linalg.inv)(H)  # H^{\bar{b} a}
-            integrand = jnp.einsum("...ba, ...ha, ...hb->...", H_inv, codiff, jnp.conj(codiff))
-            integrand = jnp.squeeze(integrand) / self.n_harmonic / self.rank_V**2
-            return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
+            codiff_norm = jnp.einsum("...ba, ...ha, ...hb->...h", H_inv, codiff, jnp.conj(codiff))
+            codiff_norm = codiff_norm / (self.rank_V**2 * self.n_harmonic)
+            codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * w) / vol_Omega
+
+            g = vmap(self._metric_fn)(p)
+            g_inv = jnp.linalg.inv(g)
+            eta_norm = jnp.einsum("...vu, ...ba, ...hav, ...hbu->...h", g_inv, H_inv, eta, jnp.conj(eta))
+            eta_norm = eta_norm / (self.rank_V**2 * self.n_harmonic)
+            eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * w) / vol_Omega
+
+            return codiff_integral / eta_integral
+
+            # integrand = jnp.squeeze(jnp.abs(integrand)) / jnp.squeeze(jnp.abs(eta_norm))
+            # if self.n_harmonic > 1: integrand = jnp.mean(integrand, axis=-1)
+            # integrand = jnp.squeeze(integrand) / self.n_harmonic
+            # return jnp.mean(jnp.abs(integrand) * w) / vol_Omega
         
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1) 
         w_valid = w * valid_mask
@@ -1894,15 +1911,21 @@ class HarmonicForm(HarmonicBundle):
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
         F = vmap(self.curvature_form_V, in_axes=(0,None))(p, self.H_metric_fn)
-        H = vmap(self.H_metric_fn)(p)
+        # H = vmap(self.H_metric_fn)(p)
+        H = vmap(self._untwisted_metric)(p)
         G_matter = self.inner_product_Hodge(data, eta, g, H)
         G_matter_eigvals = jnp.linalg.eigvalsh(G_matter)
 
-        codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
+        codiff, eta = vmap(self.codifferential_eta, in_axes=(0,None,None,None))(p, params, None, True)
         if self.n_harmonic > 1: codiff = jnp.squeeze(codiff)
         H_inv = jnp.linalg.inv(H)   # H^{\bar{b} a}
         codiff_integrand = jnp.einsum("...ba, ...ha, ...hb->...h", H_inv, codiff, jnp.conj(codiff))
         codiff_integrand = jnp.squeeze(jnp.mean(codiff_integrand, axis=-1)) / (self.rank_V**2)
+        eta_norm = jnp.einsum("...vu, ...ba, ...hav, ...hbu->...", g_inv, H_inv, eta, jnp.conj(eta))
+        eta_norm = eta_norm / (self.n_harmonic * self.rank_V**2)
+
+        codiff_l2_norm = jnp.sqrt(vmap(jnp.linalg.norm)(codiff))
+        eta_l2_norm = jnp.sqrt(vmap(jnp.linalg.norm)(eta))
 
         F0 = vmap(self.trace_free_curvature_correction, in_axes=(0,0,None,None))(p,
                 pb, self.endo_params, self.conf_params)
@@ -1917,10 +1940,11 @@ class HarmonicForm(HarmonicBundle):
 
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, 
                 # "max_eig": jnp.mean(w * max_eig) / vol_Omega, 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, 
-                "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega,
+                "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega, "eta_norm": jnp.mean(w * jnp.abs(eta_norm)) // vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'codiff_norm': jnp.mean(w * jnp.abs(codiff_integrand)) / vol_Omega,
                 'Λ_F_0_energy': jnp.mean(w * energy) / vol_Omega, 'G_Kahler': jnp.diag(G_matter),
-                'G_matter_eigvals': G_matter_eigvals}
+                'G_matter_eigvals': G_matter_eigvals, 'codiff_l2': jnp.mean( w * codiff_l2_norm) / jnp.mean(w), 
+                'eta_l2': jnp.mean(w * eta_l2_norm) / jnp.mean(w)}
     
     def callback(self, val_data, params, storage, logger, epoch, t0):
         loss_breakdown_dict = self.loss_breakdown(val_data, params)
@@ -1942,7 +1966,7 @@ class HarmonicForm(HarmonicBundle):
         self.name = f"harmonic_HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
         self.eval_interval = 1  # epochs
         self.save_interval = 4
-        self.eval_interval_t = 4096  # iterations
+        self.eval_interval_t = 128  # iterations
 
         storage = defaultdict(list)
         import logging
