@@ -1524,8 +1524,8 @@ class HarmonicForm(HarmonicBundle):
         super().__init__(metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys)
         # self.family_ids = [0,2,6,8,17,19,22,40,42,45,49]
         # self.family_ids = [2,6,8,22] #,40,42,45,49]
-        self.family_ids = [2]#,6] #,40,42,45,49]
-        # self.family_ids = [0,2,8,49]
+        # self.family_ids = [2]#,6] #,40,42,45,49]
+        self.family_ids = [0,2,8,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
@@ -1921,14 +1921,20 @@ class HarmonicForm(HarmonicBundle):
             H_inv = vmap(jnp.linalg.inv)(H)  # H^{\bar{b} a}
             codiff_norm = jnp.einsum("...ba, ...ha, ...hb->...h", H_inv, codiff, jnp.conj(codiff))
             codiff_norm = codiff_norm / (self.rank_V**2 * self.n_harmonic)
-            codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * w) / vol_Omega
-            return codiff_integral
+            if self.n_harmonic == 1: 
+                codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * w) / vol_Omega
+            else:
+                codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
+            # return codiff_integral
 
             g = vmap(self._metric_fn)(p)
             g_inv = jnp.linalg.inv(g)
             eta_norm = jnp.einsum("...vu, ...ba, ...hav, ...hbu->...h", g_inv, H_inv, eta, jnp.conj(eta))
             eta_norm = eta_norm / (self.rank_V**2 * self.n_harmonic)
-            eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * w) / vol_Omega
+            if self.n_harmonic == 1:
+                eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * w) / vol_Omega
+            else:
+                eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
 
             return codiff_integral / eta_integral
 
@@ -1968,8 +1974,8 @@ class HarmonicForm(HarmonicBundle):
         g = vmap(self._metric_fn)(p)
         g_inv = jnp.linalg.inv(g)
         F = vmap(self.curvature_form_V, in_axes=(0,None))(p, self.H_metric_fn)
-        # H = vmap(self.H_metric_fn)(p)
-        H = vmap(self._untwisted_metric)(p)
+        H = vmap(self.H_metric_fn)(p)
+        # H = vmap(self._untwisted_metric)(p)
         G_matter = self.inner_product_Hodge(data, eta, g, H)
         G_matter_eigvals = jnp.linalg.eigvalsh(G_matter)
 
@@ -2023,7 +2029,7 @@ class HarmonicForm(HarmonicBundle):
         self.name = f"harmonic_HYM_{datetime.now().strftime('%Y-%m-%d_%H')}" if name is None else name
         self.eval_interval = 1  # epochs
         self.save_interval = 4
-        self.eval_interval_t = 128  # iterations
+        self.eval_interval_t = 2048  # iterations
 
         storage = defaultdict(list)
         import logging
