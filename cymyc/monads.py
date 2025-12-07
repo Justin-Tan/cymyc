@@ -1526,6 +1526,7 @@ class HarmonicForm(HarmonicBundle):
         # self.family_ids = [2,6,8,22] #,40,42,45,49]
         # self.family_ids = [2]#,6] #,40,42,45,49]
         self.family_ids = [0,2,8,49]
+        # self.family_ids = [0,8,49]
         self.n_harmonic = len(self.family_ids)
         self.conf_params = fixed_params['conf']
         self.endo_params = fixed_params['endo']
@@ -1672,9 +1673,15 @@ class HarmonicForm(HarmonicBundle):
                    self.eps_3d, self.eps_3d, nu, nu, nu)
         contraction = jnp.squeeze(contraction)
 
-        kappa_abc = jnp.expand_dims(Omega**2, axis=((1,2,3))) * contraction
+        # kappa_abc = jnp.expand_dims(Omega**2, axis=((1,2,3))) * contraction
+        kappa_abc = jnp.expand_dims(Omega, axis=((1,2,3))) * contraction
+        dVol_Omega = jnp.real(Omega * jnp.conjugate(Omega))
+
+        prefactor = 1./math.factorial(self.cy_dim)
+        norm_factor = (-2*1.j)**self.cy_dim * prefactor  # convert from C^3 to R^6 - convention, since dVol_{CY} = w^n/n!
+        # chi = norm_factor * weights/dVol_Omega * c_n
         
-        kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc
+        kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc * norm_factor
         int_kappa_abc = jnp.mean(kappa_integrand, axis=0)
 
         return int_kappa_abc
