@@ -1917,7 +1917,7 @@ class HarmonicForm(HarmonicBundle):
             H_inv = vmap(jnp.linalg.inv)(H)  # H^{\bar{b} a}
             codiff_norm = jnp.einsum("...ba, ...ha, ...hb->...h", H_inv, codiff, jnp.conj(codiff))
             codiff_norm = codiff_norm / (self.rank_V**2 * self.n_harmonic)
-            if self.n_harmonic == 1:
+            if self.n_harmonic == 1: 
                 codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * w) / vol_Omega
             else:
                 codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
