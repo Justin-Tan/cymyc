@@ -1660,31 +1660,44 @@ class HarmonicForm(HarmonicBundle):
 
 
     @partial(jax.jit, static_argnums=(0,))
-    def yukawa_couplings(self, p):
-        p_c = math_utils.to_complex(p)
-        weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(p_c)
+    def yukawa_couplings(self, data):
+        (_p, weights, dVol_Omega) = data
+        p_c = math_utils.to_complex(_p)
 
         dQdz = vmap(alg_geo.evaluate_dQdz, in_axes=(0,None,None))(p_c, self.dQdz_monomials, self.dQdz_coeffs)
         Omega = vmap(self.Omega_fn)(p_c, jnp.expand_dims(dQdz,1))
 
-        nu = vmap(self.H1XV_representatives)(p)  # [..., h^1_V, rank_V, cy_dim]
+        nu = vmap(self.H1XV_representatives)(_p)  # [..., h^1_V, rank_V, cy_dim]
         
         contraction = jnp.einsum('...ijk, ...xyz, ...aix, ...bjy, ...ckz -> ...abc',
                    self.eps_3d, self.eps_3d, nu, nu, nu)
         contraction = jnp.squeeze(contraction)
 
-        # kappa_abc = jnp.expand_dims(Omega**2, axis=((1,2,3))) * contraction
         kappa_abc = jnp.expand_dims(Omega, axis=((1,2,3))) * contraction
         dVol_Omega = jnp.real(Omega * jnp.conjugate(Omega))
 
         prefactor = 1./math.factorial(self.cy_dim)
         norm_factor = (-2*1.j)**self.cy_dim * prefactor  # convert from C^3 to R^6 - convention, since dVol_{CY} = w^n/n!
-        # chi = norm_factor * weights/dVol_Omega * c_n
         
         kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc * norm_factor
         int_kappa_abc = jnp.mean(kappa_integrand, axis=0)
 
         return int_kappa_abc
+
+    @partial(jax.jit, static_argnums=(0,))
+    def _inner_product_Hodge(self, data, eta, g_pred, H_pred):
+        """
+        This uses a different convention for the data tuple.
+        """
+        (_p, weights, dVol_Omega) = data
+        g_inv = jnp.linalg.inv(g_pred)  # g^{\bar{\nu} \mu}
+        H_inv = jnp.linalg.inv(H_pred)  # H^{\bar{b} a}
+        integrand = jnp.einsum("...vu, ...mav, ...nbu, ...ba->...mn", g_inv, eta, jnp.conj(eta), H_inv)
+        
+        det_g = jnp.squeeze(jnp.real(jnp.linalg.det(g_pred)))
+        vol_g = jnp.mean(det_g * weights / dVol_Omega)
+        _weights = jnp.expand_dims(det_g * weights / dVol_Omega, axis=(1,2))
+        return jnp.mean(integrand * _weights, axis=0) / vol_g
 
     @partial(jax.jit, static_argnums=(0,))
     def yukawa_couplings_normalised(self, data, params):
@@ -1704,17 +1717,50 @@ class HarmonicForm(HarmonicBundle):
         return kappa_normalised
 
 
-    def yukawa_couplings_batched(self, p, batch_size=16384, kappa_dtype=np.float32):
+    def yukawa_couplings_batched(self, p, batch_size=16384, kappa_dtype=np.float64):
         n = 0
         kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
+        n_chunks = p.shape[0] // batch_size
+        p_data = jnp.array_split(p, n_chunks)
+        for t, _p in enumerate(tqdm(p_data, total=len(p_data))):
+            B = _p.shape[0]
+            weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(math_utils.to_complex(_p))
+            _data = (_p, weights, dVol_Omega)
+
+            _kappa = self.yukawa_couplings(_data)
+            kappa = kappa = math_utils.online_update_array(kappa, _kappa, n, B)
+            n += B
+        return kappa
+    
+    def yukawa_couplings_normalised_batched(self, p, params, batch_size=1024, kappa_dtype=np.float64,
+                                            G_matter_dtype=np.complex128):
+        n = 0
+        EPS = 1e-5
+        kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
+        G_matter = jnp.zeros((self.n_harmonic, self.n_harmonic), G_matter_dtype)
+
         n_chunks = p.shape[0] // batch_size
         data = jnp.array_split(p, n_chunks)
         for t, _p in enumerate(tqdm(data, total=len(data))):
             B = _p.shape[0]
-            _kappa = self.yukawa_couplings(_p)
+            weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(math_utils.to_complex(_p))
+            _data = (_p, weights, dVol_Omega)
+
+            _kappa = self.yukawa_couplings(_data)
             kappa = kappa = math_utils.online_update_array(kappa, _kappa, n, B)
+
+            eta = vmap(self.harmonic_rep, in_axes=(0,None))(_p, params)
+            g = vmap(self._metric_fn)(_p)
+            H = vmap(self.H_metric_fn)(_p)
+            _G_matter = self.inner_product_Hodge(_data, eta, g, H)
+            G_matter = math_utils.online_update_array(G_matter, _G_matter, n, B)
+
             n += B
-        return kappa
+        lambdas, U = jnp.linalg.eigh(G_matter)
+        A = U / jnp.sqrt(lambdas + EPS)
+        kappa_normalised = jnp.einsum('...ax, ...by, ...cz, ...abc -> ...xyz',
+                                      A, A, A, kappa)
+        return kappa_normalised, kappa, G_matter
     
     @staticmethod
     def _low_rank_reconstruct(M_1, M_2, S, Ok_monomials):
