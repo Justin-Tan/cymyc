@@ -1829,6 +1829,7 @@ class HarmonicForm(HarmonicBundle):
         det_H_Vk = jnp.abs(jnp.linalg.det(H_Vk_fs)) * jnp.exp(self.rank_V * f)
         return jnp.power(det_H_Vk, 1./self.rank_V)
 
+    @partial(jax.jit, static_argnums=(0,))
     def untwisted_metric_fast(self, p, frame_idx=None):
         # Untwist metric on $V \otimes \mathcal{L}^k$ with determinant bundle
         H_K = self.section_metric_network(p, self.endo_params, self.conf_params, frame_idx=frame_idx)
@@ -1899,6 +1900,7 @@ class HarmonicForm(HarmonicBundle):
                             complex_out=True)
         return s
 
+    @partial(jax.jit, static_argnums=(0,))
     def harmonic_rep(self, p, params, frame_idx=None):
         p_c = math_utils.to_complex(p)
         pb = self.pb_fn(p_c)
