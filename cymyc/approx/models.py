@@ -218,6 +218,51 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
             out = nn.Dense(self.n_out, name='scalar')(x)
         return out
     
+class LearnedVector_spectral_nn_heads(LearnedVector_spectral_nn):
+    r"""Spectral network implementation for manifolds embedded in a product of projective
+    space factors, ${P}^{n_1} \times \cdots \times \mathbb{P}^{n_K}$.
+    """
+    n_heads: int = 1
+    def setup(self):
+        self.n_hidden = len(self.n_units)
+        self.layers = [nn.Dense(f) for f in self.n_units]
+        self.dims = np.array(self.ambient) + 1
+        head_out_dim = self.n_out * 2 if self.complex_out else self.n_out
+        self.heads = [nn.Dense(head_out_dim, name=f'head_{i}') for i in range(self.n_heads)]
+
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"], frame_idx=None) -> Array:
+        
+        x_c = math_utils.to_complex(jnp.squeeze(x))
+        if frame_idx is not None: 
+            frame_idx = jnp.argmax(jnp.abs(x_c[:self.n_heads]))
+
+        if self.use_spectral_embedding is True:
+            x = self.spectral_layer(x, self.dim)
+
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i != self.n_hidden - 1:
+                x = self.activation(x)
+        
+        # frame-dependent branching
+        def head_fn(i):
+            def apply_head(mdl, x):
+                out = mdl.heads[i](x)
+                if mdl.complex_out:
+                    out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
+                return out
+            return apply_head
+        
+        branches = [head_fn(i) for i in range(self.n_heads)]
+        # run all branches on init
+        if self.is_mutable_collection('params'):
+            for branch in branches:
+                _ = branch(self, x)
+
+        out = nn.switch(frame_idx, branches, self, x)
+        return jnp.squeeze(out)
+    
 class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     r"""
     A network that outputs a complex lower-triangular matrix L, suitable for
@@ -666,6 +711,19 @@ def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
     return LearnedVector_spectral_nn(p.shape[-1]//2, ambient, n_units, n_out,
             use_spectral_embedding=spectral, activation=activation,
             complex_out=complex_out).apply({'params': params}, p)
+
+@partial(jit, static_argnums=(2,3,4,5,6,7))
+def _phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int, 
+             ambient: Sequence[int], n_out: int = 1, spectral: bool = True,
+             activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu,
+             complex_out: bool = False, aux=None) -> Complex[Array, "n_out"]:
+    print(f'Compiling {_phi_head.__qualname__}')
+    n_units = [params[k]['kernel'].shape[-1] for k in params.keys() if 'layer' in k]
+
+    return LearnedVector_spectral_nn_h(p.shape[-1]//2, ambient, n_units, n_out,
+            use_spectral_embedding=spectral, activation=activation,
+            complex_out=complex_out).apply({'params': params}, p, aux)
+
 
 @partial(jit, static_argnums=(2,3))
 def ddbar_phi_model(p: Float[Array, "i"], params: Mapping[str, Array], 

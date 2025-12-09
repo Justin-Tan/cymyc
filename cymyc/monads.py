@@ -1660,7 +1660,7 @@ class HarmonicForm(HarmonicBundle):
 
 
     @partial(jax.jit, static_argnums=(0,))
-    def yukawa_couplings(self, data):
+    def yukawa_couplings(self, data, output_variance=False):
         (_p, weights, dVol_Omega) = data
         p_c = math_utils.to_complex(_p)
 
@@ -1681,6 +1681,12 @@ class HarmonicForm(HarmonicBundle):
         
         kappa_integrand = jnp.expand_dims(weights / dVol_Omega, axis=((1,2,3))) * kappa_abc * norm_factor
         int_kappa_abc = jnp.mean(kappa_integrand, axis=0)
+
+        if output_variance is True:
+            # S_int_kappa = math_utils.shifted_variance(kappa_integrand, int_kappa_abc)
+            S_int_re_kappa = jnp.mean((jnp.real(kappa_integrand) - jnp.real(int_kappa_abc))**2, axis=0)
+            S_int_im_kappa = jnp.mean((jnp.imag(kappa_integrand) - jnp.imag(int_kappa_abc))**2, axis=0)
+            return int_kappa_abc, S_int_re_kappa, S_int_im_kappa
 
         return int_kappa_abc
 
@@ -1732,35 +1738,77 @@ class HarmonicForm(HarmonicBundle):
             n += B
         return kappa
     
-    def yukawa_couplings_normalised_batched(self, p, params, batch_size=1024, kappa_dtype=np.float64,
-                                            G_matter_dtype=np.complex128):
+    def yukawa_couplings_normalised_batched(self, p, params, batch_size=1024, kappa_dtype=np.complex128,
+                                            G_matter_dtype=np.complex128, output_variance=False):
         n = 0
         EPS = 1e-5
-        kappa = jnp.zeros((self.n_harmonic, self.n_harmonic, self.n_harmonic), kappa_dtype)
-        G_matter = jnp.zeros((self.n_harmonic, self.n_harmonic), G_matter_dtype)
+        
+        # Accumulators
+        kappa_sum = None
+        G_matter_sum = None
+        total_N = 0
+        
+        batches = []
 
         n_chunks = p.shape[0] // batch_size
         data = jnp.array_split(p, n_chunks)
+        
         for t, _p in enumerate(tqdm(data, total=len(data))):
             B = _p.shape[0]
             weights, pb, dVol_Omega, _ = vmap(self.integration_weights_fn)(math_utils.to_complex(_p))
             _data = (_p, weights, dVol_Omega)
 
             _kappa = self.yukawa_couplings(_data)
-            kappa = kappa = math_utils.online_update_array(kappa, _kappa, n, B)
-
+            
             eta = vmap(self.harmonic_rep, in_axes=(0,None))(_p, params)
             g = vmap(self._metric_fn)(_p)
             H = vmap(self.H_metric_fn)(_p)
             _G_matter = self.inner_product_Hodge(_data, eta, g, H)
-            G_matter = math_utils.online_update_array(G_matter, _G_matter, n, B)
+            
+            if kappa_sum is None:
+                kappa_sum = jnp.zeros_like(_kappa, dtype=kappa_dtype)
+                G_matter_sum = jnp.zeros_like(_G_matter, dtype=G_matter_dtype)
 
-            n += B
-        lambdas, U = jnp.linalg.eigh(G_matter)
-        A = U / jnp.sqrt(lambdas + EPS)
-        kappa_normalised = jnp.einsum('...ax, ...by, ...cz, ...abc -> ...xyz',
-                                      A, A, A, kappa)
-        return kappa_normalised, kappa, G_matter
+            kappa_sum += _kappa * B
+            G_matter_sum += _G_matter * B
+            total_N += B
+
+            if output_variance:
+                batches.append((_kappa, _G_matter, B))
+
+        kappa_mean = kappa_sum / total_N
+        G_matter_mean = G_matter_sum / total_N
+
+        def compute_norm_kappa(k, G):
+            lambdas, U = jnp.linalg.eigh(G)
+            A = U / jnp.sqrt(lambdas + EPS)
+            
+
+            max_idx = jnp.argmax(jnp.abs(A), axis=0)
+            ref_vals = A[max_idx, jnp.arange(A.shape[1])]
+            phases = jnp.angle(ref_vals)
+            A = A * jnp.exp(-1j * phases)
+            
+            return jnp.einsum('...ax, ...by, ...cz, ...abc -> ...xyz', A, A, A, k)
+
+        kappa_normalised = compute_norm_kappa(kappa_mean, G_matter_mean)
+
+        if output_variance:
+
+            jk_samples = []
+            for (_k, _G, _B) in batches:
+                k_loo = (kappa_sum - _k * _B) / (total_N - _B)
+                G_loo = (G_matter_sum - _G * _B) / (total_N - _B)
+                jk_samples.append(compute_norm_kappa(k_loo, G_loo))
+            
+            jk_samples = jnp.stack(jk_samples)
+            N_batches = len(batches)
+            
+            var_kappa_normalised = ((N_batches - 1) / N_batches) * jnp.sum(jnp.abs(jk_samples - jnp.mean(jk_samples, axis=0))**2, axis=0)
+            
+            return kappa_normalised, kappa_mean, G_matter_mean, var_kappa_normalised
+
+        return kappa_normalised, kappa_mean, G_matter_mean
     
     @staticmethod
     def _low_rank_reconstruct(M_1, M_2, S, Ok_monomials):
@@ -1895,10 +1943,29 @@ class HarmonicForm(HarmonicBundle):
         s_norm = jnp.linalg.norm(s, keepdims=True)
         return s# / s_norm
 
-    def s_head(self, p, params):
-        s = models.phi_head(p, params, self.n_hyper, tuple(self.ambient), self.rank_V, spectral=True,
-                            complex_out=True)
+    def s_head(self, p, params, frame_idx=None):
+        s = models._phi_head(p, params, self.n_hyper, tuple(self.ambient), self.rank_V, spectral=True,
+                            complex_out=True, aux=frame_idx)
+        if self.n_harmonic > 1:
+            s = s.reshape((self.n_harmonic, self.rank_V))
+        else:
+            s = jnp.expand_dims(s, axis=0)
         return s
+
+
+    def transition_loss(self, p, H_inv, params):
+        frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
+        s_i = self.s_head(p, params, frame_idx)
+        s_i = jnp.repeat(jnp.expand_dims(s_i, axis=0), self.rank_B - 1, axis=0)
+        other_frames = jnp.delete(jnp.arange(self.rank_B), frame_idx, axis=0)
+        T_ij = vmap(self.transition_function, in_axes=(None, None, 0))(p, frame_idx, other_frames)
+        s_j = jnp.einsum("...xha, ...xab->...xhb", s_i, jnp.linalg.inv(T_ij))
+        s_j_pred = vmap(self.s_head, in_axes=(None, None,0))(p, params, other_frames)
+        diff = s_j - s_j_pred
+        loss = jnp.einsum("...xha, ...xhb, ...ba->...", diff, jnp.conj(diff), H_inv) / self.n_harmonic
+        return jnp.abs(loss) / (self.rank_B - 1)
+
+
 
     @partial(jax.jit, static_argnums=(0,))
     def harmonic_rep(self, p, params, frame_idx=None):
@@ -1955,7 +2022,9 @@ class HarmonicForm(HarmonicBundle):
     
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params, sentinel=None, norm_control=True,
-                           full_contraction=True, MAX_NORM=100.):
+                           full_contraction=True, MAX_NORM=100., toggle_transition_loss=False,
+                           C=10**1):
+        EPS = 1e-5
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
         # codiff = vmap(self.codifferential_eta, in_axes=(0,None))(p, params)
@@ -1965,6 +2034,10 @@ class HarmonicForm(HarmonicBundle):
         if norm_control is True:
             codiff_norm = vmap(jnp.linalg.norm)(codiff) / self.n_harmonic  # don't squeeze
             valid_mask = (codiff_norm < MAX_NORM).astype(w.dtype)
+
+        if toggle_transition_loss is True:
+            _transition_loss = vmap(self.transition_loss, in_axes=(0,0,None))(p, H_inv, params)
+
 
         if full_contraction is True:
             # H = vmap(self.H_metric_fn)(p)
@@ -1986,12 +2059,14 @@ class HarmonicForm(HarmonicBundle):
                 eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * w) / vol_Omega
             else:
                 eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
-
-            return codiff_integral / eta_integral
+            rayleigh_quotient = codiff_integral / (eta_integral + EPS)
+            if toggle_transition_loss is True: return rayleigh_quotient + C * jnp.mean(_transition_loss)
+            return rayleigh_quotient
 
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1)
         w_valid = w * valid_mask
         loss = jnp.mean(abs_codiff * jnp.expand_dims(w_valid, 1)) / jnp.mean(w_valid)
+        if toggle_transition_loss is True: return loss + C * jnp.mean(_transition_loss)
         return loss
     
     @partial(jax.jit, static_argnums=(0,))
