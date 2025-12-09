@@ -1944,7 +1944,9 @@ class HarmonicForm(HarmonicBundle):
         return s# / s_norm
 
     def s_head(self, p, params, frame_idx=None):
-        s = models._phi_head(p, params, self.n_hyper, tuple(self.ambient), self.rank_V, spectral=True,
+        p_c = math_utils.to_complex(p)
+        if frame_idx is None: frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
+        s = models._phi_head(p, params, self.n_hyper, tuple(self.ambient), self.n_harmonic * self.rank_V, spectral=False,
                             complex_out=True, aux=frame_idx)
         if self.n_harmonic > 1:
             s = s.reshape((self.n_harmonic, self.rank_V))
@@ -1957,7 +1959,7 @@ class HarmonicForm(HarmonicBundle):
         frame_idx = jnp.argmax(jnp.abs(math_utils.to_complex(p))[:self.rank_B])
         s_i = self.s_head(p, params, frame_idx)
         s_i = jnp.repeat(jnp.expand_dims(s_i, axis=0), self.rank_B - 1, axis=0)
-        other_frames = jnp.delete(jnp.arange(self.rank_B), frame_idx, axis=0)
+        other_frames = jnp.delete(jnp.arange(self.rank_B), frame_idx, axis=0, assume_unique_indices=True)
         T_ij = vmap(self.transition_function, in_axes=(None, None, 0))(p, frame_idx, other_frames)
         s_j = jnp.einsum("...xha, ...xab->...xhb", s_i, jnp.linalg.inv(T_ij))
         s_j_pred = vmap(self.s_head, in_axes=(None, None,0))(p, params, other_frames)
@@ -1971,9 +1973,10 @@ class HarmonicForm(HarmonicBundle):
     def harmonic_rep(self, p, params, frame_idx=None):
         p_c = math_utils.to_complex(p)
         pb = self.pb_fn(p_c)
+        if frame_idx is None: frame_idx = jnp.argmax(jnp.abs(p_c)[:self.rank_B])
         xi = self.H1XV_representatives(p, frame_idx)  # [..., h^1_V, rank_V, cy_dim]
-        correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params, frame_idx)
-        ## correction_ambient = curvature.del_bar_z(p, self.s_head, False, params)
+        # correction_ambient = curvature.del_bar_z(p, self.section_combination, False, params, frame_idx)
+        correction_ambient = curvature.del_bar_z(p, self.s_head, False, params, frame_idx)
         if self.n_harmonic == 1: correction_ambient = jnp.expand_dims(correction_ambient, 0)
         form_correction = jnp.einsum('...hai,...ji->...haj', correction_ambient, jnp.conj(pb))
         eta = xi + form_correction
@@ -2022,8 +2025,8 @@ class HarmonicForm(HarmonicBundle):
     
     @partial(jax.jit, static_argnums=(0,))
     def objective_function(self, data, params, sentinel=None, norm_control=True,
-                           full_contraction=True, MAX_NORM=100., toggle_transition_loss=False,
-                           C=10**1):
+                           full_contraction=True, MAX_NORM=100., toggle_transition_loss=True,
+                           C=10**0):
         EPS = 1e-5
         (p, pb, w) = data
         vol_Omega = jnp.mean(w)
@@ -2034,9 +2037,8 @@ class HarmonicForm(HarmonicBundle):
         if norm_control is True:
             codiff_norm = vmap(jnp.linalg.norm)(codiff) / self.n_harmonic  # don't squeeze
             valid_mask = (codiff_norm < MAX_NORM).astype(w.dtype)
-
-        if toggle_transition_loss is True:
-            _transition_loss = vmap(self.transition_loss, in_axes=(0,0,None))(p, H_inv, params)
+            w_valid = w * valid_mask
+            vol_valid = jnp.mean(w_valid)
 
 
         if full_contraction is True:
@@ -2051,6 +2053,10 @@ class HarmonicForm(HarmonicBundle):
                 codiff_integral = jnp.mean(jnp.squeeze(jnp.abs(codiff_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
             # return codiff_integral
 
+            if toggle_transition_loss is True:
+                _transition_loss = vmap(self.transition_loss, in_axes=(0,0,None))(p, H_inv, params)
+                _transition_loss = jnp.mean(w_valid * _transition_loss) / vol_valid
+
             g = vmap(self._metric_fn)(p)
             g_inv = jnp.linalg.inv(g)
             eta_norm = jnp.einsum("...vu, ...ba, ...hav, ...hbu->...h", g_inv, H_inv, eta, jnp.conj(eta))
@@ -2060,13 +2066,17 @@ class HarmonicForm(HarmonicBundle):
             else:
                 eta_integral = jnp.mean(jnp.squeeze(jnp.abs(eta_norm)) * jnp.expand_dims(w, axis=-1)) / vol_Omega
             rayleigh_quotient = codiff_integral / (eta_integral + EPS)
-            if toggle_transition_loss is True: return rayleigh_quotient + C * jnp.mean(_transition_loss)
+            if toggle_transition_loss is True: return rayleigh_quotient + C * _transition_loss
             return rayleigh_quotient
+
+        if toggle_transition_loss is True:
+            _transition_loss = vmap(self.transition_loss, in_axes=(0,0,None))(p, H_inv, params)
+            _transition_loss = jnp.mean(w_valid * _transition_loss) / vol_valid
 
         abs_codiff = jnp.mean(jnp.abs(codiff), axis=-1)
         w_valid = w * valid_mask
-        loss = jnp.mean(abs_codiff * jnp.expand_dims(w_valid, 1)) / jnp.mean(w_valid)
-        if toggle_transition_loss is True: return loss + C * jnp.mean(_transition_loss)
+        loss = jnp.mean(abs_codiff * jnp.expand_dims(w_valid, 1)) / vol_valid
+        if toggle_transition_loss is True: return loss + C * _transition_loss
         return loss
     
     @partial(jax.jit, static_argnums=(0,))
@@ -2083,11 +2093,11 @@ class HarmonicForm(HarmonicBundle):
         return jnp.mean(integrand * _weights, axis=0) / vol_g
     
     @partial(jax.jit, static_argnums=(0,))
-    def loss_breakdown(self, data, params):
+    def loss_breakdown(self, data, params, toggle_transition_loss=True):
 
         p, pb, w = data
         vol_Omega = jnp.mean(w)
-        loss = self.objective_function(data, params)
+        loss = self.objective_function(data, params, toggle_transition_loss=toggle_transition_loss)
         eta = vmap(self.harmonic_rep, in_axes=(0,None))(p, params)
 
         g = vmap(self._metric_fn)(p)
@@ -2120,13 +2130,15 @@ class HarmonicForm(HarmonicBundle):
         max_eig = vmap(jnp.linalg.norm)(g_tr_F)
         Tr_F_g = vmap(jnp.trace)(g_tr_F)
 
+        _transition_loss = vmap(self.transition_loss, in_axes=(0,0,None))(p, H_inv, params)
+
         return {'loss': loss, 'Tr_F_g': jnp.mean(w * Tr_F_g) / vol_Omega, 
                 # "max_eig": jnp.mean(w * max_eig) / vol_Omega, 'det_F_g': jnp.mean(w * det_g_tr_F) / vol_Omega, 
                 "det_H": jnp.mean(w * jnp.linalg.det(H)) / vol_Omega, "eta_norm": jnp.mean(w * jnp.abs(eta_norm)) / vol_Omega,
                 'Tr_F_g_var': jnp.var(jnp.abs(g_tr_F)), 'codiff_norm': jnp.mean(w * jnp.abs(codiff_integrand)) / vol_Omega,
                 'Λ_F_0_energy': jnp.mean(w * energy) / vol_Omega, 'G_Kahler': jnp.diag(G_matter),
                 'G_matter_eigvals': G_matter_eigvals, 'codiff_l2': jnp.mean( w * codiff_l2_norm) / jnp.mean(w), 
-                'eta_l2': jnp.mean(w * eta_l2_norm) / jnp.mean(w)}
+                'eta_l2': jnp.mean(w * eta_l2_norm) / jnp.mean(w), 'transition_loss': jnp.mean(w * _transition_loss) / vol_Omega}
     
     def callback(self, val_data, params, storage, logger, epoch, t0):
         loss_breakdown_dict = self.loss_breakdown(val_data, params)
@@ -2141,6 +2153,14 @@ class HarmonicForm(HarmonicBundle):
         if epoch % self.save_interval == 0:
             utils.save_logs(storage, self.name, epoch)
         return storage
+
+    @staticmethod
+    def _create_train_state(rng, model, optimizer, data_dim):
+        rng, init_rng = random.split(rng)
+        params = model.init(rng, jnp.ones([1, data_dim]), 0)['params']
+        # params = model.init(rng)['params']
+        opt_state = optimizer.init(params)
+        return params, opt_state, init_rng
 
     def fit_harmonic(self, data_path, epochs: int = 128, batch_size: int = 512, lr: float = 1e-4,
             shuffle_rng = np.random.default_rng(), name = None, ckpt: dict = None):
@@ -2185,21 +2205,22 @@ class HarmonicForm(HarmonicBundle):
         )
         self.n_units_harmonic = [48,64,48]
 
-        coeff_class = models.CoeffNetwork_spectral_nn_CICY_holoV
-        bundle_harmonic_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
-                 n_1=self.n_sections_V, n_2=1, n_harmonic=self.n_harmonic, use_low_rank_approx=self.use_low_rank_approx,
-                 low_rank_dim=self.low_rank_dim)
-        #bundle_harmonic_model = models.LearnedVector_spectral_nn(self.n_homo_coords,self.ambient, self.n_units_harmonic,
-        #                                                                 n_out=self.rank_V, use_spectral_embedding=True,
-        #                                                             complex_out=True)
+        #coeff_class = models.CoeffNetwork_spectral_nn_CICY_holoV
+        #bundle_harmonic_model = coeff_class(self.n_homo_coords, self.ambient, self.n_units_harmonic,
+        #         n_1=self.n_sections_V, n_2=1, n_harmonic=self.n_harmonic, use_low_rank_approx=self.use_low_rank_approx,
+        #         low_rank_dim=self.low_rank_dim)
+        bundle_harmonic_model = models.LearnedVector_spectral_nn_heads(self.n_homo_coords,self.ambient, self.n_units_harmonic,
+                                                                 n_out=self.n_harmonic * self.rank_V,
+                                                                       use_spectral_embedding=False,
+                                                                 complex_out=True, n_heads=self.rank_B)
 
-        _params, _opt_state, _ = create_train_state(_k, bundle_harmonic_model, _tx, data_dim=self.n_homo_coords * 2)
+        _params, _opt_state, _ = self._create_train_state(_k, bundle_harmonic_model, _tx, data_dim=self.n_homo_coords * 2)
         if ckpt is not None:
             _params, _opt_state = utils.load_ckpt(_params, _opt_state, ckpt['params'], ckpt['opt'])
         param_count = sum(x.size for x in jax.tree_util.tree_leaves(_params))
         logger.info(f'Params (Count: {param_count})=========>>>')
         logger.info(jax.tree_util.tree_map(lambda x: x.shape, _params))
-        logger.info(bundle_harmonic_model.tabulate(_k, jnp.ones([1, self.n_homo_coords * 2])))
+        logger.info(bundle_harmonic_model.tabulate(_k, jnp.ones([1, self.n_homo_coords * 2]),0))
 
         t0 = time.time()
         with jax.default_device(device):

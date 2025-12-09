@@ -720,7 +720,7 @@ def _phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
     print(f'Compiling {_phi_head.__qualname__}')
     n_units = [params[k]['kernel'].shape[-1] for k in params.keys() if 'layer' in k]
 
-    return LearnedVector_spectral_nn_h(p.shape[-1]//2, ambient, n_units, n_out,
+    return LearnedVector_spectral_nn_heads(p.shape[-1]//2, ambient, n_units, n_out,
             use_spectral_embedding=spectral, activation=activation,
             complex_out=complex_out).apply({'params': params}, p, aux)
 
