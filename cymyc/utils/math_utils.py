@@ -153,28 +153,36 @@ def online_update(mu, x, n, B=1., S=None, _S=None):
 @jit
 def online_update_array(mu, x, n, B=1., S=None, _S=None):
     """
-    Use's Welford's method to compute the running variance, if 
-    `S` provided.
+    Uses Welford's method to compute the running mean and variance.
     """
-    Z_SCORE_THRESHOLD = 3
-    FREE_START = 5
-    mu = jnp.where(n==0, x, mu)
-    mu_update = mu + (x - mu) * B / (n+B)
-    # x = jnp.where(jnp.isnan, mu, x)
+    mu = jnp.where(n == 0, x, mu)
+    mu_update = mu + (x - mu) * B / (n + B)
 
     if S is not None:
-        delta = mu - x
-        S_update = S + _S + delta**2 * n * B / (n+B)
+        delta = x - mu
+        S_update = S + _S + jnp.square(delta) * (n * B) / (n + B)
+        
+        Z_SCORE_THRESHOLD = 3.0
+        FREE_START_N = 5 * B # Number of samples to see before rejecting
 
-        # reject large deviations
-        var = S / (n-1)
-        mask = (jnp.abs(mu - x) / jnp.sqrt(var)) < Z_SCORE_THRESHOLD
+        def reject_outliers():
+            var_prev = S / (n - 1)
+            z_score = jnp.abs(x - mu) / jnp.sqrt(var_prev + 1e-8)
+            
+            mask = z_score < Z_SCORE_THRESHOLD
+            
+            running_mean = jnp.where(mask, mu_update, mu)
+            running_S = jnp.where(mask, S_update, S)
+            return running_mean, running_S
 
-        running_mean = jnp.where(mask, mu_update, mu)
-        running_S = jnp.where(mask, S_update, S)
+        def accept_all():
+            return mu_update, S_update
 
-        running_mean = jnp.where(n <= FREE_START * B, mu_update, running_mean)
-        running_S = jnp.where(n <= FREE_START * B, S_update, running_S)
+        running_mean, running_S = jax.lax.cond(
+            n > FREE_START_N,
+            reject_outliers,
+            accept_all
+        )
         
         return running_mean, running_S
 
@@ -202,6 +210,11 @@ def rescale(x):
     m = jnp.argmax(jnp.abs(x), axis=-1)
     x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)    
     return x, m
+
+def rescale_patch(x, patch):
+    m = jnp.ones(x.shape[0], dtype=int) * patch
+    x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)
+    return x
 
 def S2np1_uniform(key, n_p, n):
     """

@@ -99,10 +99,16 @@ def poincare_residue(dQdz, elim_idx):
     """
     return 1./dQdz[elim_idx]
 
-def argmax_dQdz(points, dQdz):
+def argmax_dQdz(points, dQdz, aux=False):
     # Finds $$\argmax_i |dQ/dz_i|$$
+    n_coords = points.shape[-1]
     ones_mask = jnp.logical_not(jnp.isclose(points, jax.lax.complex(1.,0.)))
+    total_mask = ones_mask
     elim_idx = jnp.argmax(jnp.abs(dQdz * ones_mask), axis=-1)
+    elim_mask = (jnp.arange(n_coords) == elim_idx[np.newaxis])
+    total_mask *= ~elim_mask
+
+    if aux is True: return elim_idx, total_mask
     return elim_idx
 
 def argmax_dQdz_cicy(p, dQdz, n_hyper, n_coords, aux=False):
@@ -442,7 +448,13 @@ def compute_pullbacks(points, dQdz_info, cy_dim, cdtype=np.complex128):
     dQdz_monomials, dQdz_coefficients = [di.astype(cdtype) for di in dQdz_info]
     elim_idx, ones_idx, dQdz, good_dQdz_rescale, good_coords_mask = _create_pullback_mask(points, dQdz_monomials, dQdz_coefficients)
     pbs = _pullbacks(points, elim_idx, ones_idx, good_dQdz_rescale, good_coords_mask, cy_dim, cdtype)
+    return pbs
 
+@partial(jit, static_argnums=(2,3))
+def compute_pullbacks_set_dQ_elim(points, elim_idx, dQdz_info, cy_dim, cdtype=np.complex128):
+    dQdz_monomials, dQdz_coefficients = [di.astype(cdtype) for di in dQdz_info]
+    _, ones_idx, dQdz, good_dQdz_rescale, good_coords_mask = _create_pullback_mask(points, dQdz_monomials, dQdz_coefficients)
+    pbs = _pullbacks(points, elim_idx, ones_idx, good_dQdz_rescale, good_coords_mask, cy_dim, cdtype)
     return pbs
 
 @partial(jit, static_argnums=(3,))

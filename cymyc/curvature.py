@@ -203,7 +203,7 @@ def _christoffel_symbols_kahler_antiholo(p: Float[Array, "i"], metric_fn: Callab
     """
     return jnp.conjugate(christoffel_symbols_kahler(p, metric_fn, pullbacks))
 
-@partial(jit, static_argnums=(3,))
+@partial(jit, static_argnums=(1,3,))
 def riemann_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
                           pullbacks: Complex[Array, "cy_dim i"] = None,
                           return_aux: bool = False) -> Complex[Array, "j j j j"] | Sequence[Array]:
@@ -283,7 +283,7 @@ def ricci_tensor_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array
     
     return ricci_tensor
 
-@jit
+@partial(jit, static_argnums=(1,))
 def ricci_form_kahler(p: Float[Array, "i"], metric_fn: Callable[[Array], Array], 
                       pullbacks: Complex[Array, "cy_dim i"] = None) -> Complex[Array, "j j"]:
     r""" Returns Ricci form $\rho$ on a Kähler manifold, with support for variety $\iota: X \hookrightarrow \mathbb{P}^n$. 

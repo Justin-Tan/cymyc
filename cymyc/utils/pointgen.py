@@ -61,7 +61,7 @@ def univariate_coefficient_data(cy_dim, monomials, coefficients):
     return t_coeffs_data, generators
 
 # @partial(jit, static_argnums=(3,))
-def root_solver(p, q, t_coeffs_data, t_generators):
+def root_solver(p, q, t_coeffs_data, t_generators, device=cpu_device):
 
     pq = jnp.concatenate([p,q], axis=-1)
     assert pq.shape[-1] == len(t_generators)
@@ -75,7 +75,7 @@ def root_solver(p, q, t_coeffs_data, t_generators):
     t_coeffs = jnp.array(t_coeffs)
 
     # Bezout's theorem says this returns `c_dim` intersection points
-    with jax.default_device(cpu_device):
+    with jax.default_device(device):
         t_roots = jnp.roots(t_coeffs, strip_zeros=False)
     pts = p + jnp.expand_dims(t_roots, 1) * q
     return pts, t_coeffs
@@ -105,8 +105,6 @@ def sample_intersect_hypersurface(key: random.PRNGKey, n_p: int,
     pts, t_coeffs = vmap(root_solver, in_axes=(0,0,None,None))(
         p, q, t_coeffs_data.values(), tuple(generators))
     pts = pts.reshape(-1, c_dim)
-    abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(pts, 
-                    monomials, coefficients))
 
     # recall Bezout's theorem guarantees `c_dim` intersecting points
     # rescale points - return homogeneous coords with $\max{|z_i|} = 1$
@@ -131,6 +129,8 @@ if __name__ == "__main__":
     parser.add_argument('-n_p', '--num_pts', type=int, help="Number of points to generate.", default=100000)
     parser.add_argument('-val', '--val_frac', type=float, help="Percentage of points to use for validation.", default=0.2)
     parser.add_argument('-psi', '--psi', type=float, help="Complex moduli parameter.", default=0.0)
+    parser.add_argument('-patch', '--patch', type=int, help="Patch points will be returned in.", default=None)
+
     args = parser.parse_args()
 
     start = time.time()
@@ -160,11 +160,42 @@ if __name__ == "__main__":
     # check CY condition
     abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(p, monomials, coefficients)).max()
     print(f'Max locus violation: {abs_poly_val:.7e}')
-    
+
+    def keep_patch(p, patch):
+        m = jnp.argmax(jnp.abs(p), axis=-1)
+        return p[m == patch]
+        # return p[jnp.logical_or(m == patch, m == 0)]
+
+    def rescale(x, patch):
+        m = jnp.ones(x.shape[0], dtype=int) * patch
+        x = x / jnp.take_along_axis(x, jnp.expand_dims(m,-1), axis=-1)
+        return x
+
+    def check_min(p, patch, threshold=1e-1):
+        mask = jnp.abs(p)[:,patch] > threshold
+        return rescale(p[mask], patch)
+
+    if args.patch is not None:
+        # _p = check_min(p, args.patch)
+        _p = keep_patch(p, args.patch)
+        out, total = [_p], _p.shape[0]
+        while total < (n_p + v_p):
+            _p = sample_intersect_hypersurface(key, int(1.1 * (n_p + v_p - total)) + v_p, 
+                    cy_dim, monomials, coefficients)
+            # _p = check_min(_p, args.patch)
+            _p = keep_patch(_p, args.patch)
+            abs_poly_val = jnp.abs(vmap(alg_geo.evaluate_poly, in_axes=(0,None,None))(_p,
+                monomials, coefficients)).max()
+            print(f'Max locus violation: {abs_poly_val:.7e}')
+            total += _p.shape[0]
+            out.append(_p)
+            print(f'Points in patch {args.patch} accumulated:', total)
+        p = jnp.concatenate(out, axis=0)[:(n_p + v_p)]
+
     det_g_FS_fn = fubini_study.det_fubini_study_pb
 
     from tqdm import tqdm
-    max_batch_size = (n_p + v_p) // 32
+    max_batch_size = (n_p + v_p) // 64
     B = max_batch_size
     data_batched = dataloading._online_batch(p, n_p + v_p, B)
     weights, pullbacks, dVol_Omegas = [], [], []
@@ -192,17 +223,6 @@ if __name__ == "__main__":
     dVol_Omegas = np.squeeze(np.concatenate(dVol_Omegas, axis=0))
     p = math_utils.to_real(p)
 
-    """
-    weights, pullbacks, dVol_Omegas, *_ = vmap(alg_geo.compute_integration_weights, in_axes=(0,None,None,None))(
-        p, dQdz_monomials, dQdz_coeffs, cy_dim)
-
-    p = math_utils.to_real(p)
-
-    _det_g_FS_pb = vmap(det_g_FS_fn)(p, pullbacks)
-    vol_g = jnp.mean(weights * _det_g_FS_pb / dVol_Omegas).item()
-    vol_Omega = jnp.mean(weights).item()
-    """
-
     kappa = (vol_g / vol_Omega)
 
     conf, p_conf = math_utils._configuration_matrix((monomials,), ambient)
@@ -211,6 +231,8 @@ if __name__ == "__main__":
     topological_data = {'chi': chi, 'c2_w_J': c2_w_J, 'vol': vol, 'canonical_vol': canonical_vol}
     print('Wall data', topological_data)
     print(f"Volume: {vol}, Volume at chosen Kahler moduli: {canonical_vol}")
+    print(f"Vol_g from numerical integration: {vol_g}")
+    print(f"Vol_Omega from numerical integration: {vol_Omega}")
 
     print(f'Saving under {args.output_path}/ ...')
     os.makedirs(args.output_path, exist_ok=True)
@@ -224,13 +246,13 @@ if __name__ == "__main__":
         p_train, p_val = np.array_split(p, (n_p,))
         w_train, w_val = np.array_split(weights, (n_p,))
         dVol_Omega_train, dVol_Omega_val = np.array_split(dVol_Omegas, (n_p,))
-        # pb_train, pb_val = np.array_split(pullbacks, (n_p,))
+        pb_train, pb_val = np.array_split(pullbacks, (n_p,))
 
         y_train = np.stack((w_train, dVol_Omega_train), axis=-1)
         y_val = np.stack((w_val, dVol_Omega_val), axis=-1)
 
         np.savez_compressed(f, x_train=p_train, y_train=y_train, x_val=p_val, 
-                            y_val=y_val, # pb_train=pb_train, pb_val=pb_val, 
+                            y_val=y_val, pb_train=pb_train, pb_val=pb_val, 
                             kappa=kappa, vol_g=vol_g, vol_Omega=vol_Omega,
                             psi=psi)
         

@@ -519,7 +519,7 @@ class Harmonic(wp.WP):
         current_patch_mask = jnp.logical_not(self._idx_to_mask(patch_idx))
 
         if (self.n_hyper == 1) and (self.n_ambient == 1):
-            other_patches = utils._generate_all_patches(self.n_homo_coords, self._transitions, self.degrees)
+            other_patches = utils._generate_all_patches(self.n_homo_coords, self.n_transitions, self.degrees)
             other_patches = other_patches[elim_idx]  # patches with elim_idx removed.
         else:  # need to generalize to product of projective spaces
             other_patches = self.get_different_patches(elim_idx, patch_idx)
@@ -946,7 +946,7 @@ class HarmonicFull(Harmonic):
         current_patch_mask = jnp.logical_not(self._idx_to_mask(patch_idx))
 
         if (self.n_hyper == 1) and (self.n_ambient == 1):
-            other_patches = utils._generate_all_patches(self.n_homo_coords, self._transitions, self.degrees)
+            other_patches = utils._generate_all_patches(self.n_homo_coords, self.n_transitions, self.degrees)
             other_patches = other_patches[elim_idx]  # patches with elim_idx removed.
         else:  # need to generalize to product of projective spaces
             other_patches = self.get_different_patches(elim_idx, patch_idx)
@@ -1039,7 +1039,6 @@ class HarmonicFull(Harmonic):
         g_inv = jnp.linalg.inv(g_pred)  # g^{\bar{\nu} \mu}
         # No squeeze
         integrand = jnp.einsum('...iua, ...jvb, ...uv, ...ab->...ij', eta, jnp.conjugate(eta), g_pred, g_inv)
-        vol_Omega = jnp.mean(weights)
 
         det_g = jnp.squeeze(jnp.real(jnp.linalg.det(g_pred)))
         vol_g = jnp.mean(det_g * weights / dVol_Omega)

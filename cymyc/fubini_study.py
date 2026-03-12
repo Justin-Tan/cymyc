@@ -104,6 +104,21 @@ def fubini_study_metric_homo_pb(p: Float[Array, "i"], dQdz_info: tuple, cy_dim: 
     
     return g_FS_pb
 
+@partial(jit, static_argnums=(2,3,4,5))
+def _fubini_study_metric_homo_pb(p: Float[Array, "i"], dQdz_info: tuple, cy_dim: int, 
+                                normalization: Complex = jax.lax.complex(1.,0.),
+                                ambient_out: bool = False, cdtype: DTypeLike = np.complex64):
+    g_FS = fubini_study_metric_homo(p, normalization, cdtype=cdtype)
+    pullbacks = alg_geo.compute_pullbacks(math_utils.to_complex(p), dQdz_info, cy_dim, cdtype=cdtype)
+    pullbacks = jax.lax.stop_gradient(pullbacks)
+
+    if ambient_out is True: return g_FS, pullbacks
+
+    g_FS_pb = jnp.einsum('...ia,...ab,...jb->...ij', pullbacks, g_FS, 
+        jnp.conjugate(pullbacks))
+    
+    return g_FS_pb
+
 @partial(jit, static_argnums=(2,3,5))
 def fubini_study_metric_homo_pb_cicy(p: Float[Array, "i"], pullbacks: Complex[Array, "cy_dim i"], n_coords : int,
                                      ambient : tuple, k_moduli: Array = None, cdtype: DTypeLike = np.complex64):

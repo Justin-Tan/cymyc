@@ -65,6 +65,7 @@ class EinsumComplex(nn.Einsum):
   precision: PrecisionLike = None
   kernel_init: Initializer = default_kernel_init
   bias_init: Initializer = initializers.zeros_init()
+  complex_kernel: bool = True
 
   @compact
   def __call__(self, inputs: Array, einsum_str: Optional[str] = None) -> Array:
@@ -102,14 +103,17 @@ class EinsumComplex(nn.Einsum):
       self.param_dtype,
     )
 
-    im_kernel = self.param(
-      'im_kernel',
-      self.kernel_init,
-      self.shape,
-      self.param_dtype,
-    )
+    if self.complex_kernel is True:
+        im_kernel = self.param(
+          'im_kernel',
+          self.kernel_init,
+          self.shape,
+          self.param_dtype,
+        )
 
-    kernel = jax.lax.complex(re_kernel, im_kernel)
+        kernel = jax.lax.complex(re_kernel, im_kernel)
+    else:
+        kernel = re_kernel
 
     if self.use_bias:
       bias_shape, broadcasted_bias_shape = self._get_bias_shape(

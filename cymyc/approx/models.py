@@ -42,6 +42,7 @@ def ansatz_fun(p, params, *args):
 ```
 """
 
+from operator import index
 import jax
 import jax.numpy as jnp
 from jax import jit, vmap, jacfwd
@@ -51,12 +52,13 @@ import numpy as np
 from flax import linen as nn
 
 from functools import partial
-from typing import Callable, Sequence, Mapping
+from typing import Callable, Sequence, Mapping, Optional
 from jaxtyping import Array, Float, Complex, ArrayLike
+from dataclasses import field
 
 # custom
 from .. import alg_geo, curvature, fubini_study
-from ..utils import math_utils, ops
+from ..utils import math_utils, ops, poly_utils
 
 class LearnedVector_spectral_nn(nn.Module):
     r"""
@@ -91,6 +93,7 @@ class LearnedVector_spectral_nn(nn.Module):
     use_spectral_embedding: bool = True
     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
     cy_dim: int = 3
+    complex_out: bool = False
     
     def setup(self):
         self.n_hidden = len(self.n_units)
@@ -156,7 +159,11 @@ class LearnedVector_spectral_nn(nn.Module):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
             
-        out = nn.Dense(self.n_out, name='scalar')(x)
+        if self.complex_out is True:
+            out = nn.Dense(self.n_out * 2, name='complex scalar')(x)
+            out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
+        else:
+            out = nn.Dense(self.n_out, name='scalar')(x)
         return jnp.squeeze(out)
 
 class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
@@ -204,9 +211,214 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
             if i != self.n_hidden - 1:
                 x = self.activation(x)
             
-        out = nn.Dense(self.n_out, name='scalar')(x)
-        return jnp.squeeze(out)
+        if self.complex_out is True:
+            out = nn.Dense(self.n_out * 2, name='complex scalar')(x)
+            out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
+        else:
+            out = nn.Dense(self.n_out, name='scalar')(x)
+        return out
     
+class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
+    r"""
+    A network that outputs a complex lower-triangular matrix L, suitable for
+    parameterising a Hermitian metric H via a Cholesky decomposition H = L @ L.conj().T.
+
+    The diagonal entries of L are enforced to be real and positive to ensure H is
+    positive-definite.
+
+    Attributes
+    ----------
+    matrix_dim : int
+        The dimension of the output square matrix.
+    """
+    matrix_dim: int = -1
+    normalise_det: bool = False
+    cdtype: jnp.dtype = jnp.complex64
+    n_frames: int = 1
+    low_rank_approx: int = 0
+
+    def setup(self):
+        super().setup()  # builds self.layers and self.dims
+        self.n_out_cholesky = self.matrix_dim * self.matrix_dim
+        # one head per frame of holomorphic vector bundle
+        # self.heads = [nn.Dense(self.n_out_cholesky, name=f'frame_head_{i}')
+        #               for i in range(self.n_frames)]
+        if self.low_rank_approx > 0:
+            self.diag_head = nn.Dense(self.matrix_dim, name=f'diag_head')
+            self.low_rank_head = nn.Dense(self.matrix_dim * self.low_rank_approx * 2, 
+                                          name=f'lr_head')
+            # self.diag_heads = [nn.Dense(self.matrix_dim, name=f'diag_head_{i}')
+            #                     for i in range(self.n_frames)]
+            # self.low_rank_heads = [nn.Dense(self.matrix_dim * self.low_rank_approx * 2,
+            #                         name=f'lr_head_{i}') for i in range(self.n_frames)]
+
+    def postprocess(self, out):
+
+        tril_off_diag_idx = jnp.tril_indices(self.matrix_dim, k=-1)
+        diag_idx = jnp.diag_indices(self.matrix_dim)
+        
+        diag = out[:self.matrix_dim]
+        if self.normalise_det is True:
+            log_diag = diag - jnp.mean(diag)
+            diag = jnp.exp(log_diag)
+        else:
+            diag = nn.softplus(diag)
+            
+        off_diag_r, off_diag_i = out[self.matrix_dim:].reshape(2, -1)
+        off_diag = jax.lax.complex(off_diag_r, off_diag_i)
+
+        L = jnp.zeros((self.matrix_dim, self.matrix_dim), dtype=self.cdtype)
+        L = L.at[diag_idx].set(diag)
+        L = L.at[tril_off_diag_idx].set(off_diag)
+        H = L @ jnp.conjugate(L).T
+        return (H + jnp.conjugate(H).T) / 2.
+
+    def lr_approx(self, x):
+        D = self.diag_head(x)
+        D = nn.softplus(D)
+        M = self.low_rank_head(x)
+        M = M.reshape((self.matrix_dim * 2, self.low_rank_approx))
+        M_r, M_i = M.reshape(2, self.matrix_dim, self.low_rank_approx)
+        M = jax.lax.complex(M_r, M_i).astype(self.cdtype)
+        return M, D
+
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"]) -> Complex[Array, "matrix_dim matrix_dim"]:
+        """
+        Forward pass that outputs a complex Hermitian matrix via the LU decomposition.
+
+        Parameters
+        ----------
+        x : Float[Array, "i"]
+            Input array of homogeneous coordinates.
+
+        Returns
+        -------
+        Complex[Array, "matrix_dim matrix_dim"]
+            Hermitian matrix.
+        """
+        if self.use_spectral_embedding is True:
+            x = math_utils.to_complex(jnp.squeeze(x))
+            frame_idx = jnp.argmax(jnp.abs(x[:self.n_frames]))
+            spectral_out = []
+
+            for i in range(len(self.ambient)):
+                s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+                p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+                p_ambient_i = math_utils.to_real(p_ambient_i)
+                spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
+
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
+        
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i != self.n_hidden - 1:
+                x = self.activation(x)
+
+       
+        """
+        # frame-dependent branching
+        def head_fn(i):
+            return lambda mdl, x: mdl.heads[i](x)
+        
+        def head_lr_fn(i):
+            return lambda mdl, x: mdl.lr_approx(x, i)
+            
+        if self.low_rank_approx == 0:
+            branches = [head_fn(i) for i in range(self.n_frames)]
+        else:
+            branches = [head_lr_fn(i) for i in range(self.n_frames)]
+
+        # run all branches on init
+        if self.is_mutable_collection('params'):
+            for branch in branches:
+                _ = branch(self, x)
+
+        out = nn.switch(frame_idx, branches, self, x)
+        """
+        if self.low_rank_approx > 0: return self.lr_approx(x)
+        out = nn.Dense(self.n_out_cholesky, name='scalar')(x)
+        return self.postprocess(jnp.squeeze(out))
+    
+    @nn.compact
+    def __call2__(self) -> Complex[Array, "matrix_dim matrix_dim"]:
+        # constant matrix version   
+        n_out_cholesky = self.matrix_dim * self.matrix_dim
+        out = jnp.squeeze(nn.Dense(n_out_cholesky, name='scalar')(jnp.zeros((1,))))
+        return self.postprocess(jnp.squeeze(out))
+
+@partial(jit, static_argnums=(2,3,4,5,6,7))
+def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
+                ambient: Sequence[int], matrix_dim: int, normalise_det: bool = False,
+                n_frames: int = 1, low_rank_approx: int = 0,
+                activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
+    r"""Wrapper to feed parameters into forward pass for section coefficient network.
+    """
+    # last layer is coeff_layer
+    print(sorted(params.keys()))
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if \
+            ('kernel' in params[k].keys() and 'layer' in k)]
+
+    variables = {'params': params}
+    return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
+                           normalise_det=normalise_det, n_frames=n_frames, low_rank_approx=low_rank_approx,
+                           activation=activation).apply(variables, p)
+                           # activation=activation).apply(variables)
+
+
+class FactorisedCholeskyNetwork(LearnedVector_spectral_nn_CICY):
+    r"""
+    Outputs a Hermitian matrix parameterised as a sum of Kronecker products
+    $ H = \sum_{r} (L_f^{(r)} L_f^{(r)\dagger}) \otimes (L_b^{(r)} L_b^{(r)\dagger}) $
+    """
+    n_fiber: int = 1
+    n_base: int = 1
+    td_rank: int = 4
+    cdtype: jnp.dtype = jnp.complex64
+
+    def setup(self):
+        super().setup()
+        self.n_out_fiber = self.n_fiber * self.n_fiber
+        self.n_out_base = self.n_base * self.n_base
+        
+        self.fiber_head = nn.Dense(self.n_out_fiber * self.td_rank * 2, name='fiber_head')
+        self.base_head = nn.Dense(self.n_out_base * self.td_rank * 2, name='base_head')
+
+    def _process_factor(self, x, dim):
+        x_r, x_i = x.reshape(2, dim, dim)
+        A = jax.lax.complex(x_r, x_i).astype(self.cdtype)
+        return A @ jnp.conjugate(A).T
+
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"]):
+        if self.use_spectral_embedding is True:
+            x = math_utils.to_complex(jnp.squeeze(x))
+            spectral_out = []
+            for i in range(len(self.ambient)):
+                s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+                p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+                p_ambient_i = math_utils.to_real(p_ambient_i)
+                spectral_out.append(self.spectral_layer(p_ambient_i, self.dims[i]))
+            x = jnp.squeeze(jnp.concatenate(spectral_out, axis=-1).reshape(-1))
+
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i != self.n_hidden - 1:
+                x = self.activation(x)
+
+        out_f = self.fiber_head(x).reshape(self.td_rank, -1)
+        out_b = self.base_head(x).reshape(self.td_rank, -1)
+
+        Hs_fiber = vmap(self._process_factor, in_axes=(0, None))(out_f, self.n_fiber)
+        Hs_base  = vmap(self._process_factor, in_axes=(0, None))(out_b, self.n_base)
+
+        return Hs_fiber, Hs_base
+
+@partial(jit, static_argnums=(2,3,4,5,6))
+def factorised_cholesky_head(p, params, n_homo_coords, ambient, n_fiber, n_base, td_rank=4):
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if ('kernel' in params[k] and 'layer' in k)]
+    return FactorisedCholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units,
+                                     n_fiber=n_fiber, n_base=n_base, td_rank=td_rank).apply({'params': params}, p)
 
 class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
     r"""
@@ -297,11 +509,126 @@ class CoeffNetwork_spectral_nn_CICY(LearnedVector_spectral_nn):
             return coeffs
 
 
+class CoeffNetwork_spectral_nn_CICY_holoV(CoeffNetwork_spectral_nn_CICY):
+    r"""
+    Generalisation of parent class to arbitrary holomorphic vector bundle. Returns coefficients
+    of sections of $H^1(X;V)$ to be used in numerical approx. of harmonic representatives.
 
-@partial(jit, static_argnums=(2,3,4,5,6))
+    Returns $\psi_{ai}$, where $a,b$ run over the relevant basis elements for each axis.
+    """
+    n_1: int = 1
+    n_2: int = 1
+
+    n_harmonic: int = 1
+    use_spectral_embedding: bool = True
+    complex_kernel: bool = True
+    use_low_rank_approx: bool = False  # True
+    low_rank_dim: int = 16
+    rank_V: int = 3
+
+    def setup(self):
+        if self.n_1 < self.n_2:
+            tmp = self.n_1
+            self.n_1 = self.n_2
+            self.n_2 = tmp
+        self.n_hidden = len(self.n_units)
+        self.dims = np.array(self.ambient) + 1  # coords for each ambient space factor
+
+        self.layers = [nn.Dense(f) for f in self.n_units]
+        # self.ln_final = nn.LayerNorm()
+
+        self.common_ambient_space = len(set(list(self.ambient))) == 1  # flag if ambient space factors are different
+        if not self.common_ambient_space: raise NotImplementedError
+        if self.use_low_rank_approx is True:
+            self.low_rank_head_n_1 = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                self.low_rank_dim, self.n_1), "...i, ...ihlm->...hlm", 
+                                                name='lr_coeffs_n1', complex_kernel=self.complex_kernel)
+            self.low_rank_head_n_2 = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                self.low_rank_dim, self.n_2), "...i, ...ihlm->...hlm", 
+                                                name='lr_coeffs_n2', complex_kernel=self.complex_kernel)
+            scale_init = 10.
+            self.scale = self.param(
+                "lr_scale",
+                nn.initializers.constant(scale_init),
+                (len(self.ambient) * self.n_harmonic, self.rank_V),
+            )
+        else:
+            # einsum layers for each ambient space factor. LHS: input, RHS: learnable kernel.
+            if self.n_2 > 1:
+                self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                    self.n_1, self.n_2), "...i, ...ihab->...hab", 
+                                                    name='layers_coeffs', complex_kernel=self.complex_kernel)
+            else:
+                self.coeff_layer = ops.EinsumComplex((self.n_units[-1], len(self.ambient) * self.n_harmonic, 
+                                                    self.n_1), "...i, ...iha->...ha", 
+                                                    name='layers_coeffs', complex_kernel=self.complex_kernel)
+        
+    def lr_approx(self, x):
+        M_1 = self.low_rank_head_n_1(x)
+        M_2 = self.low_rank_head_n_2(x)
+        return M_1, M_2
+    
+    @nn.compact
+    def __call__(self, x: Float[Array, "i"], aux: Float[Array, "j"] = None) -> Array:
+        """Forward pass for coefficients, modelled as vector-valued functions on $X$. 
+
+        Parameters
+        ----------
+        x : Float[Array, "i"]
+            Input array of homogeneous coordinates, local coordinates for each
+            projective space factor are listed consecutively in the input array.
+        aux: Float[Array, "j"]
+            Auxiliary input array to be concatenated with spectral embedding.
+
+        Returns
+        -------
+        Complex[Array, "n_out"]
+            Output of vector-valued function.
+        """      
+        # Coefficients and basis
+        spectral_out = []
+        x = math_utils.to_complex(jnp.squeeze(x))
+
+        for i in range(len(self.ambient)):
+            s, e = int(np.sum(self.ambient[:i]) + i), int(np.sum(self.ambient[:i+1]) + i + 1)
+            p_ambient_i = jax.lax.dynamic_slice(x, (s,), (e-s,))
+            spectral_out.append(self.spectral_layer(math_utils.to_real(p_ambient_i), self.dims[i]))
+
+        # Concatenate spectral output with auxiliary input
+        if aux is not None:
+            _x = jnp.concatenate(spectral_out + [jnp.squeeze(aux)], axis=-1)
+        else:
+            _x = jnp.concatenate(spectral_out, axis=-1)
+        _x = jnp.squeeze(_x.reshape(-1))
+
+        for i, layer in enumerate(self.layers):
+            _x = layer(_x)
+            if i != self.n_hidden - 1:
+                _x = self.activation(_x)
+
+        # _x = self.ln_final(_x)
+
+        if self.use_low_rank_approx is True:
+            M_1, M_2 = self.lr_approx(_x)
+            print(f'{self.__call__.__qualname__}, low rank shapes, {M_1.shape}, {M_2.shape}')
+            return M_1, M_2, self.scale
+
+        if self.common_ambient_space:
+            coeffs = self.coeff_layer(_x)  # [..., n_A * n_harmonic, n_1, n_2]
+            print(f'{self.__call__.__qualname__}, coeff shape, {coeffs.shape}')
+            if len(self.ambient) > 1:
+                return jnp.split(coeffs, len(self.ambient), axis=0)
+            return coeffs
+        else:
+            coeffs = [coeff_layer(_x) for coeff_layer in self.coeff_layers]
+            print(f'{self.__call__.__qualname__}, coeff shapes, ', [c.shape for c in coeffs])
+            return coeffs
+
+@partial(jit, static_argnums=(2,3,4,5,6,7))
 def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int, 
-             ambient: Sequence[int], n_out: int = 1, spectral: bool = True, 
-             activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> Complex[Array, "n_out"]:
+             ambient: Sequence[int], n_out: int = 1, spectral: bool = True,
+             activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu,
+             complex_out: bool = False) -> Complex[Array, "n_out"]:
     r"""Wrapper to feed parameters into forward pass for $\phi$-component in 
     the `ddbar_phi_model`.
 
@@ -329,14 +656,16 @@ def phi_head(p: Float[Array, "i"], params: Mapping[str, Array], n_hyper: int,
         Output of vector-valued function.
     """
     print(f'Compiling {phi_head.__qualname__}')
-    n_units = [params[k]['kernel'].shape[-1] for k in params.keys()][:-1]
+    n_units = [params[k]['kernel'].shape[-1] for k in params.keys() if 'layer' in k]
 
     if (n_hyper > 1) or (len(ambient) > 1):
         return LearnedVector_spectral_nn_CICY(p.shape[-1]//2, ambient, n_units, n_out, 
-                use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
+                use_spectral_embedding=spectral, activation=activation,
+                complex_out=complex_out).apply({'params': params}, p)
 
     return LearnedVector_spectral_nn(p.shape[-1]//2, ambient, n_units, n_out,
-            use_spectral_embedding=spectral, activation=activation).apply({'params': params}, p)
+            use_spectral_embedding=spectral, activation=activation,
+            complex_out=complex_out).apply({'params': params}, p)
 
 @partial(jit, static_argnums=(2,3))
 def ddbar_phi_model(p: Float[Array, "i"], params: Mapping[str, Array], 
@@ -406,6 +735,24 @@ def coeff_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords:
     return CoeffNetwork_spectral_nn_CICY(n_homo_coords, ambient, n_units, h_21=h_21,
             activation=activation).apply({'params': params}, p)
 
+
+@partial(jit, static_argnums=(2,3,4,5,6,7,8,9))
+def coeff_head_holoV(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coords: int, 
+                     ambient: Sequence[int], n_1: int, n_2: int, n_harmonic: int = 1, 
+                     use_low_rank_approx: bool = False, low_rank_dim: int = 16, 
+                     complex_kernel=False,
+                     activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu) -> jnp.ndarray:
+    r"""Wrapper to feed parameters into forward pass for section coefficient network.
+    """
+    print(f'Compiling {coeff_head_holoV.__qualname__}')
+    # last layer is coeff_layer
+    print(sorted(params.keys()))
+    n_units = [params[k]['kernel'].shape[-1] for k in sorted(params.keys()) if type(params[k]) is dict and 'kernel' in params[k].keys()]
+
+    variables = {'params': params}
+    return CoeffNetwork_spectral_nn_CICY_holoV(dim=n_homo_coords, ambient=ambient, n_units=n_units, n_1=n_1, n_2=n_2, 
+            n_harmonic=n_harmonic, use_low_rank_approx=use_low_rank_approx, low_rank_dim=low_rank_dim,
+            activation=activation, complex_kernel=complex_kernel).apply(variables, p)
 
 def helper_fns(config):
     # Apply partial closure to commonly used functions.
