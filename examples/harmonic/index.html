@@ -1,0 +1,1852 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the cymyc software library.">
+      
+      
+        <meta name="author" content="Justin Tan">
+      
+      
+        <link rel="canonical" href="https://justin-tan.github.io/cymyc/examples/harmonic/">
+      
+      
+        <link rel="prev" href="../metric_approx/">
+      
+      
+        <link rel="next" href="../workflow/">
+      
+      
+      <link rel="icon" href="../../_static/favicon-32x32.png">
+      <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.29">
+    
+    
+      
+        <title>Harmonic forms - cymyc</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.76a95c52.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="https://unpkg.com/katex@0/dist/katex.min.css">
+    
+      <link rel="stylesheet" href="../../_static/custom_css.css">
+    
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
+    
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
+    
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#approximation-of-laplacian-zero-modes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="cymyc" class="md-header__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            cymyc
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Harmonic forms
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5c-.84 0-1.65.15-2.39.42L12 2M3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29L3.34 7m.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14L3.36 17M20.65 7l-1.77 3.79a7.023 7.023 0 0 0-2.38-4.15l4.15.36m-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29L20.64 17M12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44L12 22Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3 3.19.09m3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95 2.06.05m-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../faq/" class="md-tabs__link">
+        
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../curvature/" class="md-tabs__link">
+          
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/curvature/" class="md-tabs__link">
+          
+  
+  Basic API
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="cymyc" class="md-nav__button md-logo" aria-label="cymyc" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2.05 13h19.89c-.06.69-.2 1.36-.4 2H14v2h3v2h-2v2h-2.5v1H12c-5.18 0-9.45-3.95-9.95-9m19.89-2H2.05c.5-5.05 4.77-9 9.95-9 1.62 0 3.15.39 4.5 1.08V5h2v2H20v2h1.54c.2.64.34 1.31.4 2M12 6.75a2.5 2.5 0 0 0-2.5-2.5A2.5 2.5 0 0 0 7 6.75a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5Z"/></svg>
+
+    </a>
+    cymyc
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Justin-Tan/cymyc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    justin-tan/cymyc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 13a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0 3.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5M12 20a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m5 7.5a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m0 4a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-6a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5M14 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m-4-1.5a.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5m-3 6a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m-3-7a.5.5 0 0 0-.5.5.5.5 0 0 0 .5.5.5.5 0 0 0 .5-.5.5.5 0 0 0-.5-.5m3 3.5a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m0-4a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1Z"/></svg>
+  
+  <span class="md-ellipsis">
+    Getting started
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2m1-16A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-14a4 4 0 0 0-4 4h2a2 2 0 0 1 2-2 2 2 0 0 1 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5a4 4 0 0 0-4-4Z"/></svg>
+  
+  <span class="md-ellipsis">
+    FAQ
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Examples
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../curvature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metric_approx/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Calabi-Yau metrics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Harmonic forms
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic forms
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Motivation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-data-and-metric-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      Load data and metric checkpoint
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#harmonic-model-ansatz" class="md-nav__link">
+    <span class="md-ellipsis">
+      Harmonic model ansatz
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimisation-loop-for-harmonic-zero-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Optimisation loop for harmonic zero modes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optimisation loop for harmonic zero modes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sanity-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sanity check
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#yukawa-coupling-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Yukawa coupling computation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Example workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Basic API
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Basic API
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Geometry
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            Geometry
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/curvature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Curvature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/chern_gauss_bonnet/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Chern gauss bonnet
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/fubini_study/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Fubini study
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/moduli_space/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Moduli space
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Approximations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            Approximations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/losses/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Losses
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Models
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/harmonic/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Harmonic
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script>
+(function() {
+  function addWidgetsRenderer() {
+    var requireJsScript = document.createElement('script');
+    requireJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js';
+
+    var mimeElement = document.querySelector('script[type="application/vnd.jupyter.widget-view+json"]');
+    var jupyterWidgetsScript = document.createElement('script');
+    var widgetRendererSrc = 'https://unpkg.com/@jupyter-widgets/html-manager@*/dist/embed-amd.js';
+    var widgetState;
+
+    // Fallback for older version:
+    try {
+      widgetState = mimeElement && JSON.parse(mimeElement.innerHTML);
+
+      if (widgetState && (widgetState.version_major < 2 || !widgetState.version_major)) {
+        widgetRendererSrc = 'jupyter-js-widgets@*/dist/embed.js';
+      }
+    } catch(e) {}
+
+    jupyterWidgetsScript.src = widgetRendererSrc;
+
+    document.body.appendChild(requireJsScript);
+    document.body.appendChild(jupyterWidgetsScript);
+  }
+
+  document.addEventListener('DOMContentLoaded', addWidgetsRenderer);
+}());
+</script>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="approximation-of-laplacian-zero-modes">Approximation of Laplacian zero modes<a class="headerlink" href="#approximation-of-laplacian-zero-modes" title="Permanent link">¤</a></h1>
+<p>In this example notebook, the second in of a pair, we consider a complex manifold <span class="arithmatex">\(X\)</span>, and approximate the zero modes of the Laplacian <span class="arithmatex">\(\Delta_g\)</span> on <span class="arithmatex">\(X\)</span> by optimisation of the natural associated variational problem. One may regard this as an example of how to use the approximate metric to study the geometry of <span class="arithmatex">\(X\)</span>.</p>
+<p>The manifold <span class="arithmatex">\(X\)</span> is the same Calabi-Yau threefold defined in the previous example, where we found an approximation to the unique Ricci-flat metric tensor on <span class="arithmatex">\(X\)</span>. We will use the points sampled and optimsed parameters saved by the previous example.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">jax</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">random</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="nn">jnp</span>
+
+<span class="kn">import</span> <span class="nn">os</span><span class="o">,</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">from</span> <span class="nn">cymyc</span> <span class="kn">import</span> <span class="n">dataloading</span>
+<span class="kn">from</span> <span class="nn">cymyc.utils</span> <span class="kn">import</span> <span class="n">gen_utils</span> <span class="k">as</span> <span class="n">utils</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="motivation">Motivation<a class="headerlink" href="#motivation" title="Permanent link">¤</a></h2>
+<p>This will be a brief overview with technical details smoothed over for the ease of exposition - for the full story, please <a href="https://arxiv.org/abs/2407.13836">consult this article</a>. </p>
+<p>We are interested in differential forms on the Calabi-Yau, <span class="arithmatex">\(\eta \in \Omega^1(X)\)</span>, which are annihilated by the Laplacian on <span class="arithmatex">\(X\)</span>,
+$$ \Delta_g \eta = 0~.$$</p>
+<p>Evaluation of the Laplacian requires the metric on <span class="arithmatex">\(X\)</span> - which makes sense, as <a href="https://www.math.ucdavis.edu/~hunter/m207b/kac.pdf">eigenmodes on manifolds should tell you about geometry!</a> For physical reasons, in string compactification scenarios, we are interested in eigenmodes which are harmonic w.r.t. the Ricci-flat metric. These correspond to observable physical matter fields in string compactifications scenarios.</p>
+<p>With harmonic forms in hand, we may predict the masses and strengths with which these particles interact at low energies. The end goal is to predict if a given 'string model' (of which there are exceptionally many) recovers a quantum field theory with properties close to our universe at low energies.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="load-data-and-metric-checkpoint">Load data and metric checkpoint<a class="headerlink" href="#load-data-and-metric-checkpoint" title="Permanent link">¤</a></h2>
+<p>We load the points sampled from <span class="arithmatex">\(X\)</span> in the previous notebook, as well as the parameters for the approximate Ricci-flat metric.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="k">class</span> <span class="nc">args</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="c1"># specify training config. For more options, see `src/approx/default_config`</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;X33_demo_harmonic&quot;</span>
+    <span class="n">learning_rate</span> <span class="o">=</span> <span class="mf">1e-4</span>
+    <span class="n">n_epochs</span> <span class="o">=</span> <span class="mi">24</span>
+    <span class="n">dataset</span> <span class="o">=</span> <span class="s2">&quot;data/X33_demo/&quot;</span>
+    <span class="n">metric_checkpoint</span> <span class="o">=</span> <span class="s2">&quot;experiments/X33_demo/X33_demo_epoch_FIN_2024_10_28_14:28_PARAMS.pkl&quot;</span> <span class="c1"># replace this with your checkpoint</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">1024</span>
+    <span class="n">n_units_harmonic</span> <span class="o">=</span> <span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">42</span><span class="p">]</span>
+
+<span class="c1"># Override default arguments from config file with provided command line arguments</span>
+<span class="kn">from</span> <span class="nn">cymyc.approx.default_config</span> <span class="kn">import</span> <span class="n">config</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">override_default_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">read_metadata</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>  <span class="c1"># load dataset metadata</span>
+
+<span class="n">np_rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">()</span>
+<span class="n">data_train</span><span class="p">,</span> <span class="n">data_val</span><span class="p">,</span> <span class="n">train_loader</span><span class="p">,</span> <span class="n">val_loader</span><span class="p">,</span> <span class="n">psi</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">initialize_loaders_train</span><span class="p">(</span>
+    <span class="n">np_rng</span>      <span class="o">=</span> <span class="n">np_rng</span><span class="p">,</span>
+    <span class="n">data_path</span>   <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;dataset.npz&quot;</span><span class="p">),</span>
+    <span class="n">batch_size</span>  <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Saving config file to experiments/X33_demo_harmonic/X33_demo_harmonic_METADATA.pkl
+Dataset size: (400000, 12), kappa: 0.0393404
+Vol[g]: 0.0277778, Vol[Ω]: 0.7060880
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">cymyc.approx</span> <span class="kn">import</span> <span class="n">models</span>
+
+<span class="n">metric_model_class</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">LearnedVector_spectral_nn_CICY</span>
+<span class="n">metric_model</span> <span class="o">=</span> <span class="n">metric_model_class</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">ambient</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">n_units</span><span class="p">)</span>
+
+<span class="n">seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span> <span class="c1"># 42</span>
+<span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<span class="n">rng</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span>
+
+<span class="n">_params</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">random_params</span><span class="p">(</span><span class="n">init_rng</span><span class="p">,</span> <span class="n">metric_model</span><span class="p">,</span> <span class="n">data_dim</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">metric_params</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">load_params</span><span class="p">(</span><span class="n">_params</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">metric_checkpoint</span><span class="p">)</span>  <span class="c1"># parameters for trained metric NN</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling LearnedVector_spectral_nn.spectral_layer.
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="harmonic-model-ansatz">Harmonic model ansatz<a class="headerlink" href="#harmonic-model-ansatz" title="Permanent link">¤</a></h2>
+<p>Our variational ansatz <span class="arithmatex">\(\tilde{\eta}_{\lambda}\)</span> is obtained as an <span class="arithmatex">\(\overline{\partial}\)</span>-exact correction from some easily computable reference form <span class="arithmatex">\(\phi \in H^1(T_X)\)</span>, and the natural variational objective to minimise is the Laplacian itself,</p>
+<div class="arithmatex">\[\tilde{\eta}(\cdot; \lambda) = \phi + \bar{\partial} \mathfrak{s}(\cdot; \lambda), \quad \lambda = \textsf{argmin}_{\lambda' \in \Lambda} \Delta_g \tilde{\eta}(\cdot; \lambda').\]</div>
+<p>Here <span class="arithmatex">\(\mathfrak{s}\)</span> is a section of the (holomorphic) tangent bundle over <span class="arithmatex">\(X\)</span>. The approximation problem thus reduces to finding a way to model a section of the tangent bundle <span class="arithmatex">\(\mathfrak{s} \in \Gamma(T_X)\)</span> using a parameterised function - this is far from obvious on a manifold with nontrivial topology! </p>
+<p>The core idea is to construct a basis of sections <span class="arithmatex">\(\{ \mathbf{e}^i \}_i\)</span> of <span class="arithmatex">\(T_X\)</span>, and to take <span class="arithmatex">\(\mathfrak{s}\)</span> to be a linear combination of the basis elements, with the coefficients parameterised by a vector-valued globally defined function <span class="arithmatex">\(\psi\)</span>:
+$$ \mathfrak{s} = \sum_{\mu} \psi_{\mu} \mathbf{e}^{\mu} ~.$$
+We again we leave the full story to <a href="https://arxiv.org/abs/2407.13836">this article</a>, but note this is crucial to ensure that <span class="arithmatex">\(\tilde{\eta}\)</span> is a bona-fide geometrical object globally defined over <span class="arithmatex">\(X\)</span> - one gets nonsensical answers if the ansatz does not respect the topology of <span class="arithmatex">\(X\)</span>.</p>
+<p><strong>Note:</strong> The objective requires taking the third derivative of the neural network modelling the metric, so this example runs significantly faster on a GPU.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">flax</span> <span class="kn">import</span> <span class="n">linen</span> <span class="k">as</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">from</span> <span class="nn">cymyc.approx</span> <span class="kn">import</span> <span class="n">harmonic</span><span class="p">,</span> <span class="n">eta_train</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># initialize model</span>
+<span class="n">eta_model_class</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">CoeffNetwork_spectral_nn_CICY</span>
+<span class="n">eta_model</span> <span class="o">=</span> <span class="n">eta_model_class</span><span class="p">(</span>
+    <span class="n">dim</span>         <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span><span class="p">,</span>
+    <span class="n">ambient</span>     <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">ambient</span><span class="p">,</span>
+    <span class="n">n_units</span>     <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">n_units_harmonic</span><span class="p">,</span>
+    <span class="n">activation</span>  <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">gelu</span><span class="p">)</span>
+
+<span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">rng</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">rng</span><span class="p">)</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">logger_setup</span><span class="p">(</span><span class="s1">&#39;X33_demo_harmonic&#39;</span><span class="p">,</span> <span class="n">filepath</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">))</span>
+<span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">eta_model</span><span class="o">.</span><span class="n">tabulate</span><span class="p">(</span><span class="n">init_rng</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span> <span class="o">*</span> <span class="mi">2</span><span class="p">])))</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:30:40 INFO - logger_setup: /home/jt796/github/cymyc/docs/examples
+14:30:40 INFO - &lt;module&gt;: 
+                     CoeffNetwork_spectral_nn_CICY Summary                      
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃<span class="ansi-bold"> </span><span class="ansi-bold">path         </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">module       </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">inputs       </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">outputs      </span><span class="ansi-bold"> </span>┃<span class="ansi-bold"> </span><span class="ansi-bold">params      </span><span class="ansi-bold"> </span>┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│               │ CoeffNetwork… │ float32[1,12] │ -             │              │
+│               │               │               │ complex64[1,… │              │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_0      │ Dense         │ float32[36]   │ float32[64]   │ bias:        │
+│               │               │               │               │ float32[64]  │
+│               │               │               │               │ kernel:      │
+│               │               │               │               │ float32[36,… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">2,368 </span><span class="ansi-bold">(9.5 </span>  │
+│               │               │               │               │ <span class="ansi-bold">KB)</span>          │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_1      │ Dense         │ float32[64]   │ float32[64]   │ bias:        │
+│               │               │               │               │ float32[64]  │
+│               │               │               │               │ kernel:      │
+│               │               │               │               │ float32[64,… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">4,160 </span><span class="ansi-bold">(16.6 </span> │
+│               │               │               │               │ <span class="ansi-bold">KB)</span>          │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_2      │ Dense         │ float32[64]   │ float32[128]  │ bias:        │
+│               │               │               │               │ float32[128] │
+│               │               │               │               │ kernel:      │
+│               │               │               │               │ float32[64,… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">8,320 </span><span class="ansi-bold">(33.3 </span> │
+│               │               │               │               │ <span class="ansi-bold">KB)</span>          │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_3      │ Dense         │ float32[128]  │ float32[64]   │ bias:        │
+│               │               │               │               │ float32[64]  │
+│               │               │               │               │ kernel:      │
+│               │               │               │               │ float32[128… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">8,256 </span><span class="ansi-bold">(33.0 </span> │
+│               │               │               │               │ <span class="ansi-bold">KB)</span>          │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_4      │ Dense         │ float32[64]   │ float32[42]   │ bias:        │
+│               │               │               │               │ float32[42]  │
+│               │               │               │               │ kernel:      │
+│               │               │               │               │ float32[64,… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">2,730 </span><span class="ansi-bold">(10.9 </span> │
+│               │               │               │               │ <span class="ansi-bold">KB)</span>          │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│ layers_coeffs │ EinsumComplex │ float32[42]   │ complex64[1,… │ bias:        │
+│               │               │               │               │ float32[1,1… │
+│               │               │               │               │ im_kernel:   │
+│               │               │               │               │ float32[42,… │
+│               │               │               │               │ re_kernel:   │
+│               │               │               │               │ float32[42,… │
+│               │               │               │               │              │
+│               │               │               │               │ <span class="ansi-bold">26,775 </span>      │
+│               │               │               │               │ <span class="ansi-bold">(107.1 KB)</span>   │
+├───────────────┼───────────────┼───────────────┼───────────────┼──────────────┤
+│<span class="ansi-bold"> </span><span class="ansi-bold">             </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">             </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">             </span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">        Total</span><span class="ansi-bold"> </span>│<span class="ansi-bold"> </span><span class="ansi-bold">52,609      </span><span class="ansi-bold"> </span>│
+│<span class="ansi-bold">               </span>│<span class="ansi-bold">               </span>│<span class="ansi-bold">               </span>│<span class="ansi-bold">               </span>│<span class="ansi-bold"> </span><span class="ansi-bold">(210.4 KB)</span><span class="ansi-bold">  </span><span class="ansi-bold"> </span>│
+└───────────────┴───────────────┴───────────────┴───────────────┴──────────────┘
+<span class="ansi-bold">                                                                                </span>
+<span class="ansi-bold">                      Total Parameters: 52,609 </span><span class="ansi-bold">(210.4 KB)</span><span class="ansi-bold">                       </span>
+
+
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling LearnedVector_spectral_nn.spectral_layer.
+CoeffNetwork_spectral_nn_CICY.__call__, coeff shape, (1, 15, 21)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>For the particular manifold we consider, there is one unique harmonic one-form, as <span class="arithmatex">\(h^{(2,1)} = 1\)</span>. Topological considerations mean the number of harmonic one-forms is equal to the number of independent ways we can deform the defining polynomials while remaining on the zero locus. From the definition of the manifold as the intersection of zero loci in <span class="arithmatex">\(\mathbb{P}^5\)</span>, there is only one way to do this,</p>
+<div class="arithmatex">\[
+B_{\psi} = \left\{\begin{array}{c}Z_0^3 + Z_1^3 + Z_2^3 - 3 \psi Z_3 Z_4 Z_5 = 0\\
+Z_3^3 + Z_4^3 + Z_5^3 - 3 \psi Z_0 Z_1 Z_2 = 0\end{array} \, : \, \psi \in \mathbb{C}\right\} \subset \mathbb{P}^5~.
+\]</div>
+<p>The single complex structure moduli direction corresponds to the trilinear polynomial deformations above, and we can write down this deformation explicitly. We also need to calculate some complex structure data associated with the manifold.</p>
+<p>There's too much information to comfortably carry around as arguments to functions used in optimisation. To remedy this, we wrap everything up into an appropriately filtered class - <code>harmonic_wp</code>, whose methods are compatible with <code>Jax</code> transformations.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">cymyc</span> <span class="kn">import</span> <span class="n">alg_geo</span>
+<span class="kn">from</span> <span class="nn">examples</span> <span class="kn">import</span> <span class="n">poly_spec</span>
+
+<span class="k">def</span> <span class="nf">X33_deformation</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">complex128</span><span class="p">):</span>
+    <span class="n">d1</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;...a,aj-&amp;gt;...j&quot;</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="n">p</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">*</span><span class="n">p</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+                      <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">([[</span><span class="o">-</span><span class="mf">3.</span><span class="p">,</span><span class="mf">0.</span><span class="p">]],</span> <span class="n">precision</span><span class="p">))</span>
+    <span class="n">d2</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;...a,aj-&amp;gt;...j&quot;</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+                      <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">([[</span><span class="mf">0.</span><span class="p">,</span><span class="o">-</span><span class="mf">3.</span><span class="p">]],</span> <span class="n">precision</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">d1</span> <span class="o">+</span> <span class="n">d2</span>
+
+<span class="k">def</span> <span class="nf">_X33_coefficients</span><span class="p">(</span><span class="n">psi</span><span class="p">):</span>
+    <span class="n">coefficients</span> <span class="o">=</span> <span class="p">[</span><span class="n">jnp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="o">-</span><span class="mf">3.0</span><span class="o">*</span><span class="n">psi</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="o">-</span><span class="mf">3.0</span><span class="o">*</span><span class="n">psi</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">coefficients</span>
+
+<span class="n">monomials</span><span class="p">,</span> <span class="n">cy_dim</span><span class="p">,</span> <span class="n">kmoduli</span><span class="p">,</span> <span class="n">ambient</span> <span class="o">=</span> <span class="n">poly_spec</span><span class="o">.</span><span class="n">X33_spec</span><span class="p">()</span>
+<span class="n">coefficients</span> <span class="o">=</span> <span class="n">_X33_coefficients</span><span class="p">(</span><span class="n">psi</span><span class="p">)</span>
+
+<span class="n">dQdz_info</span> <span class="o">=</span> <span class="p">[</span><span class="n">alg_geo</span><span class="o">.</span><span class="n">dQdz_poly</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">monomials</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">)]</span>
+<span class="n">dQdz_monomials</span><span class="p">,</span> <span class="n">dQdz_coeffs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">dQdz_info</span><span class="p">))</span>
+<span class="n">config</span><span class="o">.</span><span class="n">dQdz_monomials</span> <span class="o">=</span> <span class="n">dQdz_monomials</span>
+<span class="n">config</span><span class="o">.</span><span class="n">dQdz_coeffs</span> <span class="o">=</span> <span class="n">dQdz_coeffs</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">g_FS_fn</span><span class="p">,</span> <span class="n">g_correction_fn</span><span class="p">,</span> <span class="n">pb_fn</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">helper_fns</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="c1"># full transformation-compatible closure</span>
+<span class="n">metric_fn</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">Partial</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">ddbar_phi_model</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">metric_params</span><span class="p">,</span> 
+                                  <span class="n">g_ref_fn</span><span class="o">=</span><span class="n">g_FS_fn</span><span class="p">,</span> <span class="n">g_correction_fn</span><span class="o">=</span><span class="n">g_correction_fn</span><span class="p">)</span>
+<span class="n">harmonic_wp</span> <span class="o">=</span> <span class="n">harmonic</span><span class="o">.</span><span class="n">HarmonicFull</span><span class="p">(</span><span class="n">cy_dim</span><span class="p">,</span> <span class="n">monomials</span><span class="p">,</span> <span class="n">ambient</span><span class="p">,</span> <span class="p">[</span><span class="n">X33_deformation</span><span class="p">],</span> <span class="n">dQdz_monomials</span><span class="p">,</span>
+                                <span class="n">dQdz_coeffs</span><span class="p">,</span> <span class="n">metric_fn</span><span class="p">,</span> <span class="n">pb_fn</span><span class="p">,</span> <span class="n">_X33_coefficients</span><span class="p">,</span> <span class="n">psi</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="optimisation-loop-for-harmonic-zero-modes">Optimisation loop for harmonic zero modes<a class="headerlink" href="#optimisation-loop-for-harmonic-zero-modes" title="Permanent link">¤</a></h2>
+<p>This is again fairly standard - note Jax is more bare-metal than other libraries, so we write the looping logic ourselves. </p>
+<p><code>jit</code> compilation introduces a delay the first time the <code>train_step</code> function is called, but executes quickly when called subsequently. We pay an initial up-front cost for compilation of Python functions into a form efficiently executable by an accelerator, which will be repaid during the execution itself.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">time</span><span class="o">,</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">optax</span>
+
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optax</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+        <span class="n">optax</span><span class="o">.</span><span class="n">clip_by_global_norm</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span>
+        <span class="n">optax</span><span class="o">.</span><span class="n">adamw</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">))</span>
+<span class="n">params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">init_rng</span> <span class="o">=</span> <span class="n">eta_train</span><span class="o">.</span><span class="n">create_train_state</span><span class="p">(</span><span class="n">init_rng</span><span class="p">,</span> <span class="n">eta_model</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">data_dim</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">n_ambient_coords</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="n">storage</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s1">&#39;gpu&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="k">except</span><span class="p">:</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s1">&#39;cpu&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling LearnedVector_spectral_nn.spectral_layer.
+CoeffNetwork_spectral_nn_CICY.__call__, coeff shape, (1, 15, 21)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="k">with</span> <span class="n">jax</span><span class="o">.</span><span class="n">default_device</span><span class="p">(</span><span class="n">device</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running on </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">):</span>
+        <span class="n">val_loader</span><span class="p">,</span> <span class="n">val_data</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">get_validation_data</span><span class="p">(</span><span class="n">val_loader</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">data_val</span><span class="p">,</span> <span class="n">np_rng</span><span class="p">)</span>
+        <span class="n">storage</span> <span class="o">=</span> <span class="n">eta_train</span><span class="o">.</span><span class="n">callback</span><span class="p">(</span><span class="n">harmonic_wp</span><span class="o">.</span><span class="n">loss_breakdown</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">t0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">val_data</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">storage</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;VAL&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">&amp;</span><span class="n">gt</span><span class="p">;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">train_loader</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">data_loader</span><span class="p">(</span><span class="n">data_train</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">np_rng</span><span class="p">)</span>
+
+        <span class="n">train_loader_it</span> <span class="o">=</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">train_loader</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Epoch: </span><span class="si">{</span><span class="n">epoch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="n">data_train</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">//</span><span class="n">config</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                               <span class="n">colour</span><span class="o">=</span><span class="s1">&#39;green&#39;</span><span class="p">,</span> <span class="n">mininterval</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">train_loader_it</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">eta_train</span><span class="o">.</span><span class="n">train_step</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">objective_function</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">)</span>
+            <span class="n">train_loader_it</span><span class="o">.</span><span class="n">set_postfix_str</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;loss: </span><span class="si">{</span><span class="n">loss</span><span class="si">:</span><span class="s2">.5f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">refresh</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">utils</span><span class="o">.</span><span class="n">basic_ckpt</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">opt_state</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;FIN&#39;</span><span class="p">)</span>
+<span class="n">utils</span><span class="o">.</span><span class="n">save_logs</span><span class="p">(</span><span class="n">storage</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;FIN&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:30:49 INFO - &lt;module&gt;: Running on cuda:0
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling ddbar_phi_model
+Compiling phi_head
+Compiling LearnedVector_spectral_nn.spectral_layer.
+Compiling HarmonicFull.objective_function
+Compiling HarmonicFull.del_bar_zeta_complete
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>/tmp/ipykernel_900602/1695235459.py:6: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[-3.,0.]], precision))
+/tmp/ipykernel_900602/1695235459.py:8: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[0.,-3.]], precision))
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling coeff_head
+['layers_0', 'layers_1', 'layers_2', 'layers_3', 'layers_4', 'layers_coeffs']
+Compiling LearnedVector_spectral_nn.spectral_layer.
+CoeffNetwork_spectral_nn_CICY.__call__, coeff shape, (1, 15, 21)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>/tmp/ipykernel_900602/1695235459.py:6: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[-3.,0.]], precision))
+/tmp/ipykernel_900602/1695235459.py:8: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[0.,-3.]], precision))
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>HarmonicFull.objective_function, codiff shape (1024, 1, 3)
+Compiling HarmonicFull.harmonic_rep_breakdown (1, 3, 6) (1, 5, 6) (1, 3, 3)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>/home/jt796/github/cymyc/cymyc/fubini_study.py:136: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in zeros is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  g_FS = jnp.zeros((n_coords, n_coords), dtype=cdtype)
+/home/jt796/github/cymyc/cymyc/fubini_study.py:75: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in eye is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  delta_mn = jnp.eye(complex_dim, dtype=cdtype)
+/home/jt796/dev/lib/python3.10/site-packages/jax/_src/numpy/array_methods.py:68: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in astype is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  return lax_numpy.astype(arr, dtype, copy=copy, device=device)
+/tmp/ipykernel_900602/1695235459.py:6: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[-3.,0.]], precision))
+/tmp/ipykernel_900602/1695235459.py:8: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[0.,-3.]], precision))
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling HarmonicFull.zeta_jacobian_complete
+HarmonicFull.loss_breakdown: (1024, 1, 3, 3), (1024, 1, 3, 3), (1024, 1, 3, 3)
+HarmonicFull.loss_breakdown: (1, 1), (1, 1)
+HarmonicFull.loss_breakdown: (1, 1), (1, 1)
+Harmonic.section_network_transformed, basis_form shape (6, 6, 3)
+Harmonic.section_network_transformed, O2 shape (6, 6)
+HarmonicFull.transition_loss: (4, 1, 3), (4, 1, 3)
+HarmonicFull.transition_loss: (4, 3, 3)
+HarmonicFull.transition_loss: (4, 1)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>14:31:15 INFO - callback: [35.0s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62671+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.00045-0.00000j | G_WP_CY: 0.62649+0.00000j | G_WP_KS: 0.58940-0.00000j | G_WP_bundle: 0.62025-0.00000j | codiff_mean: 2.27620 | cup_product: 0.62649+0.00000j | loss: 1.65997 | polarisation: 0.01561 | ratio (cy/bundle): 1.01005+0.00000j | symmetry: 0.00149 | transition_loss: 0.00002 | σ_measure: 0.01715
+Epoch: 0:   0%|<span class="ansi-green-fg">                                                                                                                                                                                                                                       </span>| 0/390 [00:00&lt;?, ?it/s]</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling train_step
+Compiling HarmonicFull.objective_function
+HarmonicFull.objective_function, codiff shape (1024, 1, 3)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>Epoch: 0: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:32&lt;00:00, 11.99it/s, loss: 1.32860]
+14:31:47 INFO - callback: [67.6s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62566-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02046-0.00000j | G_WP_CY: 0.60843-0.00000j | G_WP_KS: 0.58757-0.00000j | G_WP_bundle: 0.60056-0.00000j | codiff_mean: 1.77433 | cup_product: 0.60843-0.00000j | loss: 1.32885 | polarisation: 0.01100 | ratio (cy/bundle): 1.01310+0.00000j | symmetry: 0.00105 | transition_loss: 0.00005 | σ_measure: 0.01861
+Epoch: 1: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.61it/s, loss: 1.33671]
+14:32:02 INFO - callback: [82.3s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63023-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02211+0.00000j | G_WP_CY: 0.60896-0.00000j | G_WP_KS: 0.59290-0.00000j | G_WP_bundle: 0.59967-0.00000j | codiff_mean: 1.70031 | cup_product: 0.60896-0.00000j | loss: 1.27186 | polarisation: 0.00991 | ratio (cy/bundle): 1.01550+0.00000j | symmetry: 0.00094 | transition_loss: 0.00005 | σ_measure: 0.01998
+Epoch: 2: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.55it/s, loss: 1.27861]
+14:32:17 INFO - callback: [97.0s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.64637-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02328-0.00000j | G_WP_CY: 0.61311+0.00000j | G_WP_KS: 0.60882-0.00000j | G_WP_bundle: 0.60562+0.00000j | codiff_mean: 1.63999 | cup_product: 0.61311+0.00000j | loss: 1.22227 | polarisation: 0.00982 | ratio (cy/bundle): 1.01236-0.00000j | symmetry: 0.00095 | transition_loss: 0.00005 | σ_measure: 0.01776
+Epoch: 3: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.41it/s, loss: 1.16261]
+14:32:32 INFO - callback: [111.8s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.64294-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02476-0.00000j | G_WP_CY: 0.61118+0.00000j | G_WP_KS: 0.60449-0.00000j | G_WP_bundle: 0.60440-0.00000j | codiff_mean: 1.65331 | cup_product: 0.61118+0.00000j | loss: 1.23758 | polarisation: 0.01364 | ratio (cy/bundle): 1.01122+0.00000j | symmetry: 0.00132 | transition_loss: 0.00005 | σ_measure: 0.01849
+Epoch: 4: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.39it/s, loss: 1.13474]
+14:32:46 INFO - callback: [126.6s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63438+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02462+0.00000j | G_WP_CY: 0.60475-0.00000j | G_WP_KS: 0.60065-0.00000j | G_WP_bundle: 0.59778-0.00000j | codiff_mean: 1.51980 | cup_product: 0.60475-0.00000j | loss: 1.13862 | polarisation: 0.01556 | ratio (cy/bundle): 1.01166+0.00000j | symmetry: 0.00148 | transition_loss: 0.00005 | σ_measure: 0.01814
+Epoch: 5: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.40it/s, loss: 1.11696]
+14:33:01 INFO - callback: [141.4s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63007+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02768+0.00000j | G_WP_CY: 0.59541+0.00000j | G_WP_KS: 0.59187+0.00000j | G_WP_bundle: 0.59020+0.00000j | codiff_mean: 1.50262 | cup_product: 0.59541+0.00000j | loss: 1.12339 | polarisation: 0.01581 | ratio (cy/bundle): 1.00882-0.00000j | symmetry: 0.00151 | transition_loss: 0.00005 | σ_measure: 0.01806
+Epoch: 6: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.32it/s, loss: 1.16596]
+14:33:16 INFO - callback: [156.2s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63916-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02702-0.00000j | G_WP_CY: 0.60619-0.00000j | G_WP_KS: 0.60372-0.00000j | G_WP_bundle: 0.59950-0.00000j | codiff_mean: 1.48826 | cup_product: 0.60619-0.00000j | loss: 1.11567 | polarisation: 0.01515 | ratio (cy/bundle): 1.01116+0.00000j | symmetry: 0.00145 | transition_loss: 0.00005 | σ_measure: 0.01789
+Epoch: 7: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.25it/s, loss: 1.07817]
+14:33:31 INFO - callback: [171.1s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62881+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02891-0.00000j | G_WP_CY: 0.59561-0.00000j | G_WP_KS: 0.59570-0.00000j | G_WP_bundle: 0.59026-0.00000j | codiff_mean: 1.39257 | cup_product: 0.59561-0.00000j | loss: 1.04637 | polarisation: 0.01338 | ratio (cy/bundle): 1.00907+0.00000j | symmetry: 0.00131 | transition_loss: 0.00006 | σ_measure: 0.01760
+Epoch: 8: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.29it/s, loss: 1.04522]
+14:33:46 INFO - callback: [186.0s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63322-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02955-0.00000j | G_WP_CY: 0.60660+0.00000j | G_WP_KS: 0.59505+0.00000j | G_WP_bundle: 0.59911+0.00000j | codiff_mean: 1.41148 | cup_product: 0.60660+0.00000j | loss: 1.07220 | polarisation: 0.01218 | ratio (cy/bundle): 1.01251-0.00000j | symmetry: 0.00117 | transition_loss: 0.00005 | σ_measure: 0.01906
+Epoch: 9: 100%|<span class="ansi-green-fg">██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.33it/s, loss: 1.05662]
+14:34:01 INFO - callback: [200.8s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62742-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02984-0.00000j | G_WP_CY: 0.60118+0.00000j | G_WP_KS: 0.59164-0.00000j | G_WP_bundle: 0.59447-0.00000j | codiff_mean: 1.40329 | cup_product: 0.60118+0.00000j | loss: 1.06624 | polarisation: 0.01098 | ratio (cy/bundle): 1.01128+0.00000j | symmetry: 0.00106 | transition_loss: 0.00006 | σ_measure: 0.01830
+Epoch: 10: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.30it/s, loss: 1.06050]
+14:34:16 INFO - callback: [215.7s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63662-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03060+0.00000j | G_WP_CY: 0.61175+0.00000j | G_WP_KS: 0.59872-0.00000j | G_WP_bundle: 0.60362+0.00000j | codiff_mean: 1.42114 | cup_product: 0.61175+0.00000j | loss: 1.08489 | polarisation: 0.01045 | ratio (cy/bundle): 1.01347-0.00000j | symmetry: 0.00101 | transition_loss: 0.00005 | σ_measure: 0.01845
+Epoch: 11: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.32it/s, loss: 1.07115]
+14:34:30 INFO - callback: [230.6s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62945+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03060-0.00000j | G_WP_CY: 0.59642+0.00000j | G_WP_KS: 0.59091+0.00000j | G_WP_bundle: 0.58964-0.00000j | codiff_mean: 1.37652 | cup_product: 0.59642+0.00000j | loss: 1.04193 | polarisation: 0.00997 | ratio (cy/bundle): 1.01151+0.00000j | symmetry: 0.00096 | transition_loss: 0.00005 | σ_measure: 0.01769
+Epoch: 12: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.31it/s, loss: 1.03597]
+14:34:45 INFO - callback: [245.4s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62905-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03046+0.00000j | G_WP_CY: 0.60431-0.00000j | G_WP_KS: 0.59016-0.00000j | G_WP_bundle: 0.59812-0.00000j | codiff_mean: 1.39410 | cup_product: 0.60431-0.00000j | loss: 1.06245 | polarisation: 0.00959 | ratio (cy/bundle): 1.01036+0.00000j | symmetry: 0.00093 | transition_loss: 0.00005 | σ_measure: 0.01745
+Epoch: 13: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.31it/s, loss: 1.03161]
+14:35:00 INFO - callback: [260.3s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.64733-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02906+0.00000j | G_WP_CY: 0.61880-0.00000j | G_WP_KS: 0.61145+0.00000j | G_WP_bundle: 0.61192+0.00000j | codiff_mean: 1.35653 | cup_product: 0.61880-0.00000j | loss: 1.03833 | polarisation: 0.00947 | ratio (cy/bundle): 1.01123-0.00000j | symmetry: 0.00092 | transition_loss: 0.00005 | σ_measure: 0.01875
+Epoch: 14: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.29it/s, loss: 1.02154]
+14:35:15 INFO - callback: [275.1s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62227-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03119+0.00000j | G_WP_CY: 0.59337+0.00000j | G_WP_KS: 0.58216+0.00000j | G_WP_bundle: 0.58690-0.00000j | codiff_mean: 1.35817 | cup_product: 0.59337+0.00000j | loss: 1.03111 | polarisation: 0.00933 | ratio (cy/bundle): 1.01102+0.00000j | symmetry: 0.00090 | transition_loss: 0.00006 | σ_measure: 0.01775
+Epoch: 15: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.28it/s, loss: 1.00940]
+14:35:30 INFO - callback: [290.0s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63946-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03053+0.00000j | G_WP_CY: 0.61106+0.00000j | G_WP_KS: 0.60210-0.00000j | G_WP_bundle: 0.60366+0.00000j | codiff_mean: 1.36192 | cup_product: 0.61106+0.00000j | loss: 1.04222 | polarisation: 0.00969 | ratio (cy/bundle): 1.01226-0.00000j | symmetry: 0.00093 | transition_loss: 0.00006 | σ_measure: 0.01847
+Epoch: 16: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.29it/s, loss: 1.04527]
+14:35:45 INFO - callback: [304.9s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.63897+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02938+0.00000j | G_WP_CY: 0.60864+0.00000j | G_WP_KS: 0.59739+0.00000j | G_WP_bundle: 0.60115+0.00000j | codiff_mean: 1.34631 | cup_product: 0.60864+0.00000j | loss: 1.03394 | polarisation: 0.00955 | ratio (cy/bundle): 1.01246-0.00000j | symmetry: 0.00092 | transition_loss: 0.00005 | σ_measure: 0.01851
+Epoch: 17: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.31it/s, loss: 0.99576]
+14:36:00 INFO - callback: [319.7s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.64299+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03033+0.00000j | G_WP_CY: 0.61084-0.00000j | G_WP_KS: 0.60372-0.00000j | G_WP_bundle: 0.60402-0.00000j | codiff_mean: 1.31469 | cup_product: 0.61084-0.00000j | loss: 1.01105 | polarisation: 0.00958 | ratio (cy/bundle): 1.01129+0.00001j | symmetry: 0.00093 | transition_loss: 0.00005 | σ_measure: 0.01810
+Epoch: 18: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.29it/s, loss: 1.02552]
+14:36:14 INFO - callback: [334.6s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.65684-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02964+0.00000j | G_WP_CY: 0.62522+0.00000j | G_WP_KS: 0.62042-0.00000j | G_WP_bundle: 0.61759+0.00000j | codiff_mean: 1.32823 | cup_product: 0.62522+0.00000j | loss: 1.03414 | polarisation: 0.00955 | ratio (cy/bundle): 1.01235-0.00000j | symmetry: 0.00092 | transition_loss: 0.00005 | σ_measure: 0.01852
+Epoch: 19: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.25it/s, loss: 0.94967]
+14:36:29 INFO - callback: [349.5s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.65011+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.03001-0.00000j | G_WP_CY: 0.61602-0.00000j | G_WP_KS: 0.61144+0.00000j | G_WP_bundle: 0.60789-0.00000j | codiff_mean: 1.29495 | cup_product: 0.61602-0.00000j | loss: 1.00682 | polarisation: 0.00964 | ratio (cy/bundle): 1.01336+0.00000j | symmetry: 0.00093 | transition_loss: 0.00005 | σ_measure: 0.01868
+Epoch: 20: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.21it/s, loss: 0.99232]
+14:36:44 INFO - callback: [364.4s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.62450-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02969+0.00000j | G_WP_CY: 0.59524-0.00000j | G_WP_KS: 0.58997-0.00000j | G_WP_bundle: 0.58911-0.00000j | codiff_mean: 1.27056 | cup_product: 0.59524-0.00000j | loss: 0.97583 | polarisation: 0.00978 | ratio (cy/bundle): 1.01040+0.00000j | symmetry: 0.00094 | transition_loss: 0.00005 | σ_measure: 0.01735
+Epoch: 21: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.28it/s, loss: 1.00253]
+14:36:59 INFO - callback: [379.3s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.65316+0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02926-0.00000j | G_WP_CY: 0.62194+0.00000j | G_WP_KS: 0.61513-0.00000j | G_WP_bundle: 0.61363+0.00000j | codiff_mean: 1.27800 | cup_product: 0.62194+0.00000j | loss: 0.99417 | polarisation: 0.00985 | ratio (cy/bundle): 1.01354-0.00000j | symmetry: 0.00095 | transition_loss: 0.00005 | σ_measure: 0.01898
+Epoch: 22: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.26it/s, loss: 0.97764]
+14:37:14 INFO - callback: [394.2s]: [VAL] | Iter: 0 | (ξ,ξ) (WP): 0.66280-0.00000j | (∂-bar θ, ∂-bar θ) (WP): 0.02955-0.00000j | G_WP_CY: 0.63757-0.00000j | G_WP_KS: 0.62257-0.00000j | G_WP_bundle: 0.62755-0.00000j | codiff_mean: 1.32277 | cup_product: 0.63757-0.00000j | loss: 1.03961 | polarisation: 0.00977 | ratio (cy/bundle): 1.01598+0.00000j | symmetry: 0.00094 | transition_loss: 0.00005 | σ_measure: 0.02021
+Epoch: 23: 100%|<span class="ansi-green-fg">█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████</span>| 390/390 [00:14&lt;00:00, 26.27it/s, loss: 1.00871]
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="sanity-check">Sanity check<a class="headerlink" href="#sanity-check" title="Permanent link">¤</a></h3>
+<p>We can plot the evolution of the Laplacian over the optimisation process to check if the resulting ansatz <span class="arithmatex">\(\tilde{\eta}\)</span> is approaching something harmonic. Since the Laplacian is defined as
+$$\Delta_g = \frac{1}{2} \left( dd^{\dagger} + d^{\dagger}d\right)~, $$
+we can study the norm of the codifferential, <span class="arithmatex">\(\left(d^{\dagger} \tilde{\eta}, d^{\dagger} \tilde{\eta}\right)_g\)</span> to ensure <span class="arithmatex">\(\Delta_g \tilde{\eta} \approx 0\)</span>. </p>
+<p>We can also study the degree to which the polarisation-preserving condition is violated, which follows from harmonicity of <span class="arithmatex">\(\eta\)</span>, and asserts <span class="arithmatex">\(\eta_{\overline{\alpha}\overline{\nu}} = g_{\mu \overline{\nu}} \eta^{\mu}_{\; \overline{\alpha}}\)</span>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">matplotlib.gridspec</span> <span class="kn">import</span> <span class="n">GridSpec</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;font.size&#39;</span><span class="p">:</span> <span class="mi">14</span><span class="p">})</span>
+
+<span class="c1"># remove if no local tex installation</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;text.usetex&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span> 
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;text.latex.preamble&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;\usepackage[cm]</span><span class="si">{sfmath}</span><span class="s1"> \usepackage</span><span class="si">{amssymb}</span><span class="s1"> \usepackage</span><span class="si">{mathrsfs}</span><span class="s1"> \usepackage</span><span class="si">{amsmath}</span><span class="s1">&#39;</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s1">&#39;font.sans-serif&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;cm&#39;</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span><span class="mi">7</span><span class="p">))</span>
+<span class="n">gs</span><span class="o">=</span><span class="n">GridSpec</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">=</span><span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">ax2</span><span class="o">=</span><span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+
+<span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">storage</span><span class="p">[</span><span class="s1">&#39;codiff_mean&#39;</span><span class="p">])</span>
+<span class="n">n</span> <span class="o">=</span> <span class="mi">32</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">S</span><span class="p">))[:</span><span class="n">n</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">S</span><span class="p">)[:</span><span class="n">n</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="s1">&#39;royalblue&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Epochs&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;$\int_X d\mu_{\Omega} \, \Delta_g \tilde{\eta}$&#39;</span><span class="p">)</span>
+<span class="n">ax1</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;both&#39;</span><span class="p">)</span>
+<span class="c1"># ax1.set_yscale(&#39;log&#39;)</span>
+
+<span class="n">R</span> <span class="o">=</span> <span class="n">storage</span><span class="p">[</span><span class="s1">&#39;polarisation&#39;</span><span class="p">]</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">R</span><span class="p">))[:</span><span class="n">n</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">R</span><span class="p">)[:</span><span class="n">n</span><span class="p">],</span> <span class="n">c</span><span class="o">=</span><span class="s1">&#39;royalblue&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Epochs&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;Polarisation violation&#39;</span><span class="p">)</span>
+<span class="n">ax2</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;both&#39;</span><span class="p">)</span>
+<span class="c1"># ax2.set_yscale(&#39;log&#39;)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_png output_subarea">
+<img alt="No description has been provided for this image" src="data:image/png;base64,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"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="yukawa-coupling-computation">Yukawa coupling computation<a class="headerlink" href="#yukawa-coupling-computation" title="Permanent link">¤</a></h2>
+<p>For the particular class of string models we consider, we can calculate physical observables ('Yukawa couplings') via two ways:</p>
+<ul>
+<li>A computation from deformation theory, exact up to integration error.</li>
+<li>Using the approximate harmonic forms we have just optimised for.</li>
+</ul>
+<p>The purpose of this experiment is really a sanity check to ensure that our proposed method can generalise to other string models where there is no equivalent of deformation theory applicable, and the approximate harmonic forms are the only avenue for calculation of certain physical observables.
+We compare above methods below via an evaluation on the validation set.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">val_data_batched</span><span class="p">,</span> <span class="n">psi</span> <span class="o">=</span> <span class="n">dataloading</span><span class="o">.</span><span class="n">_batch_aux</span><span class="p">(</span>
+    <span class="s2">&quot;data/X33_demo/dataset.npz&quot;</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="s1">&#39;x_val&#39;</span><span class="p">,</span>
+    <span class="n">metadata_key</span><span class="o">=</span><span class="s1">&#39;psi&#39;</span><span class="p">,</span> <span class="n">aux_keys</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;y_val&#39;</span><span class="p">,),</span> <span class="n">precision</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Dataset size: (200000, 12), meta: 0.5000000
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># clunky but gets the job done</span>
+<span class="k">def</span> <span class="nf">normalised_cubic_yukawas_batched</span><span class="p">(</span><span class="n">harmonic_wp</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">data_loader</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">cymyc.utils</span> <span class="kn">import</span> <span class="n">math_utils</span>
+
+    <span class="n">wp</span><span class="p">,</span> <span class="n">kappa</span> <span class="o">=</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span>
+    <span class="n">vol_Omega</span><span class="p">,</span> <span class="n">int_a</span><span class="p">,</span> <span class="n">int_aa_p_bb</span> <span class="o">=</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span>
+    <span class="n">dQdz_monomials</span><span class="p">,</span> <span class="n">dQdz_coeffs</span> <span class="o">=</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">dQdz_monomials</span><span class="p">,</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">dQdz_coeffs</span>
+    <span class="n">metric_fn</span><span class="p">,</span> <span class="n">deformation_fn</span><span class="p">,</span> <span class="n">pb_fn</span> <span class="o">=</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">metric_fn</span><span class="p">,</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">deformation</span><span class="p">,</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">pb_fn</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">_data</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">data_loader</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">data_loader</span><span class="p">[</span><span class="mi">0</span><span class="p">])):</span>
+        <span class="n">p</span><span class="p">,</span> <span class="n">aux</span> <span class="o">=</span> <span class="n">_data</span>
+        <span class="n">p_c</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">to_complex</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">weights</span><span class="p">,</span> <span class="n">dVol_Omega</span> <span class="o">=</span> <span class="n">aux</span><span class="p">[:,</span><span class="mi">0</span><span class="p">],</span> <span class="n">aux</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">pullbacks</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">pb_fn</span><span class="p">)(</span><span class="n">math_utils</span><span class="o">.</span><span class="n">to_complex</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">dVol_Omega</span><span class="p">)</span>
+
+        <span class="n">_vol_Omega</span><span class="p">,</span> <span class="n">_int_a</span><span class="p">,</span> <span class="n">_int_aa_p_bb</span> <span class="o">=</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">_compute_wp_metric_diagonal_batch_i</span><span class="p">(</span>
+                                                <span class="n">p_c</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">pullbacks</span><span class="p">,</span> <span class="n">dQdz_monomials</span><span class="p">,</span>
+                                                <span class="n">dQdz_coeffs</span><span class="p">,</span> <span class="n">deformation_fn</span><span class="p">)</span>
+
+        <span class="n">vol_Omega</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">online_update</span><span class="p">(</span><span class="n">vol_Omega</span><span class="p">,</span> <span class="n">_vol_Omega</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+        <span class="n">int_a</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">online_update</span><span class="p">(</span><span class="n">int_a</span><span class="p">,</span> <span class="n">_int_a</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+        <span class="n">int_aa_p_bb</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">online_update</span><span class="p">(</span><span class="n">int_aa_p_bb</span><span class="p">,</span> <span class="n">_int_aa_p_bb</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+
+        <span class="c1"># Trilinear coupling</span>
+        <span class="n">_kappa</span> <span class="o">=</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">yukawas</span><span class="p">(</span>
+            <span class="n">p_c</span><span class="p">,</span> <span class="n">dQdz_monomials</span><span class="p">,</span> <span class="n">dQdz_coeffs</span><span class="p">,</span> <span class="n">deformation_fn</span><span class="p">,</span> <span class="n">deformation_fn</span><span class="p">,</span>
+            <span class="n">deformation_fn</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">pullbacks</span><span class="p">)</span>
+        <span class="n">kappa</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">online_update</span><span class="p">(</span><span class="n">kappa</span><span class="p">,</span> <span class="n">_kappa</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+
+        <span class="n">_g_pred</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">metric_fn</span><span class="p">)(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">_eta</span><span class="p">,</span> <span class="o">*</span><span class="n">_</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">harmonic_wp</span><span class="o">.</span><span class="n">harmonic_rep_breakdown</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="kc">None</span><span class="p">))(</span><span class="n">p</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+        <span class="n">_wp</span> <span class="o">=</span> <span class="n">harmonic_wp</span><span class="o">.</span><span class="n">inner_product_Hodge</span><span class="p">(</span><span class="n">_data</span><span class="p">,</span> <span class="n">_eta</span><span class="p">,</span> <span class="n">_g_pred</span><span class="p">)</span>
+        <span class="n">wp</span> <span class="o">=</span> <span class="n">math_utils</span><span class="o">.</span><span class="n">online_update</span><span class="p">(</span><span class="n">wp</span><span class="p">,</span> <span class="n">_wp</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+        <span class="n">n</span> <span class="o">+=</span> <span class="n">B</span>
+
+    <span class="n">yuk_normalised</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">kappa</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">vol_Omega</span><span class="p">)</span> <span class="o">*</span> <span class="n">wp</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">g_wp_KS</span> <span class="o">=</span> <span class="o">-</span><span class="n">int_aa_p_bb</span> <span class="o">/</span> <span class="n">vol_Omega</span> <span class="o">+</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">conjugate</span><span class="p">(</span><span class="n">int_a</span><span class="p">)</span> <span class="o">*</span> <span class="n">int_a</span><span class="p">)</span> <span class="o">/</span> <span class="n">vol_Omega</span><span class="o">**</span><span class="mi">2</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;yuk_normalised&quot;</span><span class="p">:</span>   <span class="n">yuk_normalised</span><span class="p">,</span>
+        <span class="s2">&quot;kappa&quot;</span><span class="p">:</span>            <span class="n">kappa</span><span class="p">,</span>
+        <span class="s2">&quot;wp&quot;</span><span class="p">:</span>               <span class="n">wp</span><span class="p">,</span>
+        <span class="s2">&quot;vol_Omega&quot;</span><span class="p">:</span>        <span class="n">vol_Omega</span><span class="p">,</span>
+        <span class="s2">&quot;wp_KS&quot;</span><span class="p">:</span>            <span class="n">g_wp_KS</span><span class="p">}</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">yukawa_data</span> <span class="o">=</span> <span class="n">normalised_cubic_yukawas_batched</span><span class="p">(</span><span class="n">harmonic_wp</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">val_data_batched</span><span class="p">)</span>
+<span class="n">yukawa_data</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>  0%|                                                                                                                                                                                                                                                 | 0/195 [00:00&lt;?, ?it/s]/tmp/ipykernel_900602/1695235459.py:6: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[-3.,0.]], precision))
+/tmp/ipykernel_900602/1695235459.py:8: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[0.,-3.]], precision))
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling ddbar_phi_model
+Compiling phi_head
+Compiling LearnedVector_spectral_nn.spectral_layer.
+Compiling HarmonicFull.del_bar_zeta_complete
+Compiling coeff_head
+['layers_0', 'layers_1', 'layers_2', 'layers_3', 'layers_4', 'layers_coeffs']
+Compiling LearnedVector_spectral_nn.spectral_layer.
+CoeffNetwork_spectral_nn_CICY.__call__, coeff shape, (1, 15, 21)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>/tmp/ipykernel_900602/1695235459.py:6: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[-3.,0.]], precision))
+/tmp/ipykernel_900602/1695235459.py:8: UserWarning: Explicitly requested dtype &lt;class 'numpy.complex128'&gt; requested in asarray is not available, and will be truncated to dtype complex64. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/google/jax#current-gotchas for more.
+  jnp.asarray([[0.,-3.]], precision))
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Compiling HarmonicFull.harmonic_rep_breakdown (1, 3, 6) (1, 5, 6) (1, 3, 3)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stderr output_text">
+<pre>
+<code>100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 195/195 [00:21&lt;00:00,  9.18it/s]
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_text output_subarea output_execute_result">
+<pre>
+<code>{'yuk_normalised': Array([[1.0534348+2.6020035e-07j]], dtype=complex64),
+ 'kappa': Array(-0.3489358+0.00036438j, dtype=complex64),
+ 'wp': Array([[0.60370165-9.94103e-08j]], dtype=complex64),
+ 'vol_Omega': Array(0.7061624, dtype=float32),
+ 'wp_KS': Array(0.6035413+7.4317977e-13j, dtype=complex64)}</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">yukawa_data</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">tree_util</span><span class="o">.</span><span class="n">tree_map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span> <span class="n">yukawa_data</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Normalized Yukawa coupling λ @ (ψ=</span><span class="si">{</span><span class="n">psi</span><span class="si">}</span><span class="s2">) = </span><span class="si">{</span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;yuk_normalised&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.07f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Harmonic calculation: WP @ (ψ=</span><span class="si">{</span><span class="n">psi</span><span class="si">}</span><span class="s2">) = </span><span class="si">{</span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;wp&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.07f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Kodaira-Spencer calculation: WP @ (ψ=</span><span class="si">{</span><span class="n">psi</span><span class="si">}</span><span class="s2">) = </span><span class="si">{</span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;wp_KS&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.07f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Relative error in Weil-Petersson metric = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">((</span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;wp&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;wp_KS&#39;</span><span class="p">])</span><span class="o">/</span><span class="n">yukawa_data</span><span class="p">[</span><span class="s1">&#39;wp_KS&#39;</span><span class="p">])</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.04f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Normalized Yukawa coupling λ @ (ψ=0.5) = 1.0534348+0.0000003j
+Harmonic calculation: WP @ (ψ=0.5) = 0.6037017-0.0000001j
+Kodaira-Spencer calculation: WP @ (ψ=0.5) = 0.6035413+0.0000000j
+Relative error in Weil-Petersson metric = 0.0266%
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var tab,labels=set.querySelector(".tabbed-labels");for(tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      &copy; 2024 <a href="https://github.com/justin-tan"  target="_blank" rel="noopener">Justin Tan</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "toc.integrate", "header.autohide", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.tabs.link", "content.code.annotation", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.fe8b6f2b.min.js"></script>
+      
+        <script src="../../_static/katex.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/katex.min.js"></script>
+      
+        <script src="https://unpkg.com/katex@0/dist/contrib/auto-render.min.js"></script>
+      
+    
+  </body>
+</html>
