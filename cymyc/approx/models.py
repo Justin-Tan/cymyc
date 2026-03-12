@@ -240,17 +240,11 @@ class CholeskyNetwork(LearnedVector_spectral_nn_CICY):
     def setup(self):
         super().setup()  # builds self.layers and self.dims
         self.n_out_cholesky = self.matrix_dim * self.matrix_dim
-        # one head per frame of holomorphic vector bundle
-        # self.heads = [nn.Dense(self.n_out_cholesky, name=f'frame_head_{i}')
-        #               for i in range(self.n_frames)]
+
         if self.low_rank_approx > 0:
             self.diag_head = nn.Dense(self.matrix_dim, name=f'diag_head')
             self.low_rank_head = nn.Dense(self.matrix_dim * self.low_rank_approx * 2, 
                                           name=f'lr_head')
-            # self.diag_heads = [nn.Dense(self.matrix_dim, name=f'diag_head_{i}')
-            #                     for i in range(self.n_frames)]
-            # self.low_rank_heads = [nn.Dense(self.matrix_dim * self.low_rank_approx * 2,
-            #                         name=f'lr_head_{i}') for i in range(self.n_frames)]
 
     def postprocess(self, out):
 
@@ -363,7 +357,6 @@ def cholesky_head(p: Float[Array, "i"], params: Mapping[str, Array], n_homo_coor
     return CholeskyNetwork(dim=n_homo_coords, ambient=ambient, n_units=n_units, matrix_dim=matrix_dim,
                            normalise_det=normalise_det, n_frames=n_frames, low_rank_approx=low_rank_approx,
                            activation=activation).apply(variables, p)
-                           # activation=activation).apply(variables)
 
 
 class FactorisedCholeskyNetwork(LearnedVector_spectral_nn_CICY):
