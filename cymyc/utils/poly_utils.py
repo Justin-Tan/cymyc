@@ -8,9 +8,12 @@ import sympy as sp
 
 from functools import partial
 from abc import ABC, abstractmethod
-from itertools import combinations_with_replacement
+from itertools import combinations_with_replacement, product
 
 from . import math_utils
+
+PRIME = 2_147_483_629   # prime < 2^31 with p = 1 mod 4
+SQRT_M1 = 629_208_553   # sqrt(-1) mod PRIME, for Gaussian-rational coefficients
 
 def monomial_idx(ambient, degree):
     idx = list(combinations_with_replacement(np.arange(ambient.item()+1), degree))
@@ -21,7 +24,7 @@ def mono_construct(A, i):
     return A, i
 
 def monomial_idx_to_powers(monomial_idx, ambient):
-    m_k = np.zeros((monomial_idx.shape[0], sum(ambient).item() + len(ambient)), dtype=np.int32)
+    m_k = np.zeros((monomial_idx.shape[0], np.sum(ambient).item() + len(ambient.shape)), dtype=np.int32)
     s_k, _ = vmap(jax.lax.scan, in_axes=(None,0,0))(mono_construct, m_k, monomial_idx)
     return np.array(s_k)
 
@@ -51,6 +54,35 @@ def reduced_monomial_basis(ambient, degree, monomials_mod):
             except ValueError:
                 continue
     return np.array(pows)
+
+def _to_modp(c):
+    c = sp.nsimplify(c, rational=True)
+    re, im = sp.Rational(sp.re(c)), sp.Rational(sp.im(c))
+    return int((re.p * pow(re.q, -1, PRIME) + SQRT_M1 * im.p * pow(im.q, -1, PRIME)) % PRIME)
+
+def groebner_leading_monomials(polys, variables, psi=None, order='grevlex', seed=0):
+    r"""Leading monomials of a Groebner basis of $I = (P_1, \dots, P_r)$, i.e. generators of in(I).
+    Computed exactly mod a large prime. psi=None -> random (generic) psi: valid for all but
+    finitely many psi. Pass special values (e.g. psi=0) explicitly."""
+    _psi = sp.Symbol('psi')
+    if psi is None:
+        psi = int(np.random.default_rng(seed).integers(1, PRIME))
+    psi = sp.nsimplify(psi if isinstance(psi, (int, sp.Basic)) else complex(psi), rational=True)
+    gf = []
+    for P in polys:
+        terms = sp.Poly(sp.expand(P.subs(_psi, psi)), *variables).terms()
+        coeffs = {m: _to_modp(c) for m, c in terms}
+        gf.append(sp.Poly.from_dict({m: c for m, c in coeffs.items() if c}, *variables, modulus=PRIME))
+    G = sp.groebner(gf, *variables, order=order, modulus=PRIME, method='f5b')
+    return np.array([g.monoms(order=order)[0] for g in G.polys], dtype=np.int32)
+
+def standard_monomial_basis(ambient, degree, lead_monos):
+    r"""Degree-k monomials not divisible by any leading monomial of a Groebner basis: a basis of
+    $S_k / I_k = H^0(X, O_X(k))$ for a complete intersection X of dim >= 1 (Macaulay)."""
+    pows = monomial_basis(ambient, degree)
+    lead_monos = np.atleast_2d(lead_monos)
+    divisible = np.any(np.all(pows[:, None, :] >= lead_monos[None, :, :], axis=-1), axis=1)
+    return pows[~divisible]
 
 def monomial_basis_size(ambient, degree, constraint=False):
     # constraint determined by defining polynomial
@@ -153,18 +185,18 @@ class MonomialBasis(LineBundleSections):
         n = self.ambient[0]
         return math.comb(n + self.degree, self.degree)
 
-class MonomialBasisReduced(LineBundleSections):
+class MonomialBasisReducedHypersurface(LineBundleSections):
     # work with hypersurfaces for now
     def __init__(self, ambient, degree: int, defining_polys, psi=None):
         self.ambient = ambient
-        def_poly = defining_polys
-        self.def_poly = def_poly
+        self.def_polys = defining_polys
         if psi is not None:
             _psi = sp.Symbol('psi')
-            def_poly = def_poly.subs(_psi, psi)
+            self.def_polys = [poly.subs(_psi, psi) for poly in defining_polys]
 
+        # TODO: extend to CICYs
         # monomials to quotient out
-        monomials_mod = np.array([x[0] for x in sp.Poly(def_poly, domain='CC').terms()], dtype=np.int32)
+        monomials_mod = np.array([x[0] for x in sp.Poly(self.def_polys[0], domain='CC').terms()], dtype=np.int32)
         mod_degree = np.sum(monomials_mod, axis=1)
         assert np.all(mod_degree == np.roll(mod_degree, 1))
         self.mod_degree = mod_degree[0]
@@ -180,7 +212,33 @@ class MonomialBasisReduced(LineBundleSections):
         p = self.degree - self.mod_degree
         return math.comb(n + self.degree, self.degree) - math.comb(n + p, p)
 
-def dim_OXk(ambient, degree, mod_degree):
+class MonomialBasisReduced(LineBundleSections):
+    # complete intersections in a single P^n
+    def __init__(self, ambient, degree: int, defining_polys, psi=None, variables=None, order='grevlex'):
+        self.ambient = ambient
+        self.def_polys = defining_polys
+        _psi = sp.Symbol('psi')
+        if psi is not None:
+            self.def_polys = [poly.subs(_psi, psi) for poly in defining_polys]
+
+        if variables is None:  # natural order z_0 < z_1 < ... < z_10; must match column order of points
+            syms = set().union(*[P.free_symbols for P in defining_polys]) - {_psi}
+            variables = sp.Poly(sp.Add(*syms)).gens
+        self.variables = variables
+        self.mod_degrees = [sp.Poly(P, *variables).total_degree() for P in defining_polys]
+        self.mod_degree = self.mod_degrees[0]  # legacy attribute, only meaningful for hypersurfaces
+
+        self.lead_monos = groebner_leading_monomials(defining_polys, variables, psi=psi, order=order)
+        power_matrix = standard_monomial_basis(ambient, degree, self.lead_monos)
+        assert power_matrix.shape[0] == dim_OXk(ambient, degree, self.mod_degrees), \
+            "defining polynomials are not a complete intersection"
+        super().__init__(degree, power_matrix)
+
+    @property
+    def size(self):
+        return dim_OXk(self.ambient, self.degree, self.mod_degrees)
+
+def dim_OXk_hypersurface(ambient, degree, mod_degree):
     r"""
     Finds dimension of $O_X(k)$ over algebraic variety given by 
     zero locus of degree `mod_degree`.
@@ -192,4 +250,18 @@ def dim_OXk(ambient, degree, mod_degree):
     p = degree - mod_degree
     return math.comb(n + degree, degree) - math.comb(n + p, p)
 
+def dim_OXk(ambient, degree, mod_degree):
+    r"""
+    Dimension of $H^0(X, O_X(k))$ for a complete intersection X in P^n of dim >= 1, with
+    defining degrees `mod_degree` (int for a hypersurface, or a list), from the Koszul complex:
+    $\sum_{J} (-1)^{|J|} \binom{n + k - d_J}{n}$, $d_J = \sum_{j \in J} d_j$.
+    """
+    n = int(np.asarray(ambient).ravel()[0])
+    mod_degrees = np.atleast_1d(mod_degree)
+    dim = 0
+    for J in product((0, 1), repeat=len(mod_degrees)):
+        m = degree - int(np.dot(J, mod_degrees))
+        if m >= 0:
+            dim += (-1) ** sum(J) * math.comb(n + m, n)
+    return dim
 

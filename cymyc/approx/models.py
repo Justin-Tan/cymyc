@@ -216,7 +216,7 @@ class LearnedVector_spectral_nn_CICY(LearnedVector_spectral_nn):
             out = jax.lax.complex(*jnp.split(out, 2, axis=-1))
         else:
             out = nn.Dense(self.n_out, name='scalar')(x)
-        return out
+        return jnp.squeeze(out)
     
 class LearnedVector_spectral_nn_heads(LearnedVector_spectral_nn):
     r"""Spectral network implementation for manifolds embedded in a product of projective

@@ -32,16 +32,29 @@ def reference_hermitian_structure(p: Float[Array, "i"], line_bundle: tuple, ambi
 
     return log_H
 
-@partial(jax.jit, static_argnums=(3,))
-def connection_form_line(p, pullbacks, params, log_H_fn):
+@partial(jax.jit, static_argnums=(2,))
+def connection_form_line(p, pullbacks, log_H_fn, params=None):
     # only for line bundles
     A = curvature.del_z(p, log_H_fn, params)
     return jnp.einsum("...a,...ia->...i", A, pullbacks)
 
-@partial(jax.jit, static_argnums=(3,))
-def curvature_form_line(p, pullbacks, params, log_H_fn):
+@partial(jax.jit, static_argnums=(2,))
+def curvature_form_line(p, pullbacks, log_H_fn, params=None):
     # only for line bundles
-    ddbar_log_H = curvature.del_z_bar_del_z(p, log_H_fn, True, params)
+    ddbar_log_H = curvature.del_z_bar_del_z(p, log_H_fn, params, wide=True)
+    ddbar_log_H_pb = jnp.einsum("...ia,...jb,...ab->...ij", pullbacks, jnp.conj(pullbacks), ddbar_log_H)
+    return ddbar_log_H_pb
+
+@partial(jax.jit, static_argnums=(2,))
+def _connection_form_line(p, pullbacks, log_H_fn):
+    # only for line bundles
+    A = curvature.del_z(p, log_H_fn)
+    return jnp.einsum("...a,...ia->...i", A, pullbacks)
+
+@partial(jax.jit, static_argnums=(2,))
+def _curvature_form_line(p, pullbacks, log_H_fn):
+    # only for line bundles
+    ddbar_log_H = curvature.del_z_bar_del_z(p, log_H_fn, wide=True)
     ddbar_log_H_pb = jnp.einsum("...ia,...jb,...ab->...ij", pullbacks, jnp.conj(pullbacks), ddbar_log_H)
     return ddbar_log_H_pb
 

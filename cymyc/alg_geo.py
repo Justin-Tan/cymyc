@@ -429,7 +429,7 @@ def _fs_volume_form(p, pullbacks, dQdz_monomials, dQdz_coeffs, n_hyper, cy_dim,
 
 # @partial(jit, static_argnums=(3,4,5))
 def _integration_weights_cicy(p, dQdz_monomials, dQdz_coeffs, n_hyper, cy_dim, n_coords, ambient, 
-        kmoduli_ambient, normalize_vol=False, cdtype=np.complex64):
+        kmoduli_ambient, cdtype=np.complex64):
 
     pullbacks, Omega = _pullbacks_cicy(p, dQdz_monomials, dQdz_coeffs, n_hyper, 
                                         cy_dim, n_coords, True, cdtype)

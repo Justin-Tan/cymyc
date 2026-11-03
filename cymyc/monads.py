@@ -34,9 +34,11 @@ import sympy as sp
 from flax import linen as nn
 from collections import defaultdict
 
+
 class HarmonicBundle:
 
-    def __init__(self, metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys=None):
+    def __init__(self, metric_fn, monomials, coefficients, cy_dim, ambient, defining_polys=None,
+                 default_dtype=np.complex64):
         
         self.monomials, self.coefficients = monomials, coefficients
         self.ambient = ambient
@@ -44,6 +46,7 @@ class HarmonicBundle:
         self.cy_dim = cy_dim
         self._slope = None
         self._metric_fn = metric_fn
+        self.default_dtype = default_dtype
 
         # specify monad data
         # $ 0 \rightarrow A \rightarrow B \rightarrow V \rightarrow 0 $
@@ -54,38 +57,68 @@ class HarmonicBundle:
         self.line_bundle_A_twist = 0 #1
         self.default_idx = 0
 
-
         self.rank_B = len(self.line_bundle_B)
         self.n_frames = self.rank_B
         self.cdtype = np.complex64
-        self.mb1 = jnp.asarray(poly_utils.monomial_basis(ambient, 1))
-        self.mb2 = jnp.asarray(poly_utils.monomial_basis(ambient, 2))
-        self.mb3 = jnp.asarray(poly_utils.monomial_basis(ambient, 3))
-        self.mb4 = jnp.asarray(poly_utils.monomial_basis(ambient, 4))
-        self.mb5 = jnp.asarray(poly_utils.monomial_basis(ambient, 5))
-        self.mb6 = jnp.asarray(poly_utils.monomial_basis(ambient, 6))
-        self.degree_to_monomial_basis = {1: self.mb1, 2: self.mb2, 3: self.mb3, 4: self.mb4, 5: self.mb5,
-                6: self.mb6}
-        self.n_linear = len(self.mb1)
+        max_deg = 7
+        assert self.twisting_degree <= max_deg, "Decrease twisting degree!"
+        self.degree_to_monomial_basis = {i: jnp.asarray(poly_utils.monomial_basis(ambient, i)) for i in range(1,max_deg)}
+        self.n_linear = len(self.degree_to_monomial_basis[1])
         self.Ok_powers = self.degree_to_monomial_basis[self.twisting_degree]
         self.n_Ok = len(self.Ok_powers)
 
         self.n_hyper = self.ambient_dim - self.cy_dim
-        self.n_homo_coords = monomials.shape[-1]
+        try:
+            self.n_homo_coords = monomials.shape[-1]
+        except AttributeError:
+            self.n_homo_coords = monomials[0].shape[-1]
         self.degrees = ambient + 1
         self.n_inhomo_coords = sum(self.degrees) - len(self.degrees)
-        dQdz_info = alg_geo.dQdz_poly(self.n_homo_coords, monomials, coefficients)
-        self.dQdz_monomials, self.dQdz_coeffs = dQdz_info
-        self.fs_metric_fn = jax.tree_util.Partial(fubini_study.fubini_study_metric_homo_pb, 
-                                                  dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs), cy_dim=cy_dim)
-        self.integration_weights_fn = jax.tree_util.Partial(alg_geo.compute_integration_weights,
-                dQdz_monomials=self.dQdz_monomials, dQdz_coefficients=self.dQdz_coeffs, cy_dim=cy_dim)
-        self.pb_fn = partial(alg_geo.compute_pullbacks,
-                    dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
-                    cy_dim=self.cy_dim, cdtype=self.cdtype)
-        self.pb_fn_set_dQ_idx = partial(alg_geo.compute_pullbacks_set_dQ_elim,
-                    dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
-                    cy_dim=self.cy_dim, cdtype=self.cdtype)
+
+        # dQdz_info = alg_geo.dQdz_poly(self.n_homo_coords, monomials, coefficients)
+        # self.dQdz_monomials, self.dQdz_coeffs = dQdz_info
+        dQdz_info = [alg_geo.dQdz_poly(self.n_homo_coords, m, c) for (m,c) in zip(monomials, coefficients)]
+        self.dQdz_monomials, self.dQdz_coeffs = list(zip(*dQdz_info))
+        self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
+        self.activation = nn.gelu
+
+        if (self.n_hyper > 1) or (len(self.ambient) > 1):
+            self.fs_metric_fn = partial(fubini_study._fubini_study_metric_homo_gen_pb_cicy, 
+                        dQdz_monomials=self.dQdz_monomials, 
+                        dQdz_coeffs=self.dQdz_coeffs, 
+                        n_hyper=self.n_hyper, 
+                        cy_dim=self.cy_dim, 
+                        n_coords=self.n_homo_coords,
+                        ambient=tuple(self.ambient), 
+                        k_moduli=None,
+                        ambient_out=False,
+                        cdtype=self.default_dtype)
+            self.integration_weights_fn = partial(alg_geo._integration_weights_cicy,
+                        dQdz_monomials=self.dQdz_monomials, 
+                        dQdz_coeffs=self.dQdz_coeffs, 
+                        n_hyper=self.n_hyper, 
+                        cy_dim=self.cy_dim, 
+                        n_coords=self.n_homo_coords,
+                        ambient=tuple(self.ambient))             
+            self.pb_fn = partial(alg_geo._pullbacks_cicy,
+                        dQdz_monomials=self.dQdz_monomials, 
+                        dQdz_coeffs=self.dQdz_coeffs, 
+                        n_hyper=self.n_hyper, 
+                        cy_dim=self.cy_dim, 
+                        n_coords=self.n_homo_coords,
+                        aux=False,
+                        cdtype=self.default_dtype)
+        else:
+            self.fs_metric_fn = jax.tree_util.Partial(fubini_study.fubini_study_metric_homo_pb, 
+                                                    dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs), cy_dim=cy_dim)
+            self.integration_weights_fn = jax.tree_util.Partial(alg_geo.compute_integration_weights,
+                    dQdz_monomials=self.dQdz_monomials, dQdz_coefficients=self.dQdz_coeffs, cy_dim=cy_dim)
+            self.pb_fn = partial(alg_geo.compute_pullbacks,
+                        dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
+                        cy_dim=self.cy_dim, cdtype=self.cdtype)
+            self.pb_fn_set_dQ_idx = partial(alg_geo.compute_pullbacks_set_dQ_elim,
+                        dQdz_info=(self.dQdz_monomials, self.dQdz_coeffs),
+                        cy_dim=self.cy_dim, cdtype=self.cdtype)
         
         self.Omega_fn = partial(alg_geo._holomorphic_volume_form, 
                                 n_hyper=self.n_hyper, n_coords=self.n_homo_coords,
@@ -105,44 +138,33 @@ class HarmonicBundle:
                                                       conj=False)
         
         variables = sp.symarray('z', ambient.item() + len(ambient))
-        _monad_map_AG = [v**3 for v in variables[:4]]
-        self.monad_map_power_matrix_AG = poly_utils.monomials_to_power_matrix(_monad_map_AG, variables)
-        
-        self.eps_3d = jnp.array(math_utils.n_dim_eps_symbol(3))
-        self.activation = nn.gelu
-
-        _monad_map_DKLR = [v for v in variables[:4]]
-        self.monad_map_power_matrix_DKLR = poly_utils.monomials_to_power_matrix(_monad_map_DKLR, variables)
-
-        _monad_map_ABKO = [v**2 for v in variables[:3]]
-        self.monad_map_power_matrix_ABKO = poly_utils.monomials_to_power_matrix(_monad_map_ABKO, variables)
-
-        # CHANGE THIS
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_ABKO  # DKLR
-        # self.monad_map_power_matrix = self.monad_map_power_matrix_DKLR
-        self.monad_map_power_matrix = self.monad_map_power_matrix_AG
+        _monad_maps = {"AG": [v**3 for v in variables[:4]],
+                       "DKLR": [v for v in variables[:4]],
+                       "ABKO": [v**2 for v in variables[:3]]}
+        _monad_map_power_matrices = {k: poly_utils.monomials_to_power_matrix(v, variables) for k,v in _monad_maps.items()}
+        self.monad_map_power_matrix = _monad_map_power_matrices["AG"]  # CHANGE THIS to select monad map
 
         monad_map_degree = int(self.monad_map_power_matrix.max())
         # quotient out by polynomials in the subspace bundle
-        self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree, self.twisting_degree - monad_map_degree)
+        self.n_quotient = math.comb(self.ambient_dim + self.twisting_degree - monad_map_degree,
+                                    self.twisting_degree - monad_map_degree)
         self._N_sb = len(self.degree_to_monomial_basis[self.twisting_degree]) * self.rank_B - self.n_quotient
         self.lr_approx = 32 # min(0, self._N_sb)  # set to zero for full dense matrix
         self.td_rank = 5
 
-        self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
+        try:
+            self.conf_mat, p_conf_mat = math_utils._configuration_matrix([monomials], ambient)
+        except AttributeError:
+            self.conf_mat, p_conf_mat = math_utils._configuration_matrix(monomials, ambient)
+
+        except Exception as e:
+            print(f"Error occurred while computing configuration matrix: {e}")
+            self.conf_mat = None
+            self.p_conf_mat = None
+
         self.t_degrees = math_utils._find_degrees(self.ambient, self.n_hyper, self.conf_mat)
         self.kmoduli_ambient = math_utils._kahler_moduli_ambient_factors(self.cy_dim, self.ambient, self.t_degrees)
         self.n_units = [48,48,48]
-        if (self.n_hyper > 1) or (len(self.ambient) > 1):
-            self.integration_weights_fn = partial(alg_geo._integration_weights_cicy, 
-                dQdz_monomials=self.dQdz_monomials, dQdz_coefficients=self.dQdz_coeffs,                              
-                n_hyper=self.n_hyper, cy_dim=self.dim, n_coords=self.n_homo_coords,
-                ambient=self.ambient, kmoduli_ambient=self.kmoduli_ambient, cdtype=self.cdtype)
-        else:
-            self.integration_weights_fn = partial(alg_geo.compute_integration_weights,
-                                                  dQdz_monomials=self.dQdz_monomials,
-                                                  dQdz_coefficients=self.dQdz_coeffs,
-                                                  cy_dim=self.cy_dim)
 
     @staticmethod
     def del_z_del_z_bar(p, fun, *args):
@@ -514,6 +536,10 @@ class HarmonicBundle:
     def TrF_H_0(self, p):
         F_H_0 = self.curvature_form_V(p, self.fubini_study_metric_twist_V)
         return jnp.einsum("...aaij->...ij", F_H_0)
+
+    def TrF_H_0_untwist(self, p):
+        F_H_0 = self.curvature_form_V(p, self.fubini_study_metric_V)
+        return jnp.einsum("...aaij->...ij", F_H_0)
     
     def ddbar_log_det_H(self, p, pb, endo_params, conf_params=None, conformal_factor=False):
         hess = self.del_z_del_z_bar(p, self.log_det_H, endo_params, conf_params, conformal_factor)
@@ -673,6 +699,13 @@ class HarmonicBundle:
         if inv is True: return fs_inv
         fs = jnp.linalg.inv(fs_inv)
         return fs
+
+    def fubini_study_metric_V(self, p, frame_idx=None):
+        r""" Untwist metric generated by global sections of $H^0(X; V(k))$.
+        """
+        H_K = self.fubini_study_metric_twist_V(p, frame_idx=frame_idx)
+        det_H_K = jnp.linalg.det(H_K)
+        return H_K * (det_H_K)**(-1./(self.rank_V))
 
     def _fubini_study_metric_twist_V(self, p, inv=False, frame_idx=None):
         tsb = self.twisted_section_basis(p, frame_idx=frame_idx)

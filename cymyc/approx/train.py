@@ -66,9 +66,13 @@ if __name__ == '__main__':
     parser.add_argument("-n_epochs", "--n_epochs", type=int, default=config.n_epochs, help="Number of training epochs.")
     parser.add_argument("-n_units", "--n_units", nargs='+', type=int, default=config.n_units, help="Number of hidden units in encoder/decoder.")
     parser.add_argument("-et", "--eval_interval", type=int, default=config.eval_interval, help="Evaluation frequency, in epochs.")
+    parser.add_argument("--tqdm_interval", type=int, default=64,
+                        help="Training steps between tqdm loss updates.")
     parser.add_argument("-name", "--name", type=str, default='cy_exp', help="Experiment name for logs.")
     parser.add_argument("-ckpt", "--checkpoint", type=str, default=None, help="Path to checkpointed params.")
     cmd_args = parser.parse_args()
+    if cmd_args.tqdm_interval < 1:
+        parser.error("--tqdm_interval must be at least 1")
 
     from . import models
     from .. import dataloading
@@ -150,11 +154,11 @@ if __name__ == '__main__':
                     val_loader, val_data = dataloading.get_validation_data(val_loader, config.eval_batch_size, A_val, np_rng)
                     storage = callback(epoch, t0, 0, val_data, params, metric_fn, g_FS_fn, config, storage, logger, mode='VAL')
 
-            wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
+            if t % cmd_args.tqdm_interval == 0:
+                wrapped_train_loader.set_postfix_str(f"loss: {loss:.5f}", refresh=False)
 
         if epoch % config.save_interval == 0:
             utils.basic_ckpt(params, opt_state, config.name, f'{epoch}')
 
     utils.basic_ckpt(params, opt_state, config.name, 'FIN')
     utils.save_logs(storage, config.name, 'FIN')
-
